@@ -3,6 +3,7 @@ package com.smartpatient.prescription.service;
 import com.smartpatient.appointment.entity.Appointment;
 import com.smartpatient.appointment.repository.AppointmentRepository;
 import com.smartpatient.audit.service.AuditService;
+import com.smartpatient.common.exception.BadRequestException;
 import com.smartpatient.common.exception.ResourceNotFoundException;
 import com.smartpatient.doctor.entity.Doctor;
 import com.smartpatient.doctor.repository.DoctorRepository;
@@ -56,6 +57,10 @@ public class PrescriptionService {
 
     @Transactional
     public Prescription createPrescription(Long doctorUserId, CreatePrescriptionRequest request) {
+        if (request.getPatientId() == null) {
+            throw new BadRequestException("Patient ID is required for doctor prescriptions.");
+        }
+
         Doctor doctor = doctorRepository.findByUser_UserId(doctorUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor profile not found for user: " + doctorUserId));
 
@@ -77,25 +82,7 @@ public class PrescriptionService {
 
         Prescription saved = prescriptionRepository.save(prescription);
 
-        // Auto-generate initial daily doses (for current week / duration)
-        LocalDate end = request.getEndDate() != null ? request.getEndDate() : request.getStartDate().plusDays(7);
-        LocalDate cur = request.getStartDate();
-
-        String foodStr = request.getFoodInstruction() != null ? request.getFoodInstruction().name().replace('_', ' ') : "AFTER FOOD";
-
-        while (!cur.isAfter(end) && !cur.isAfter(request.getStartDate().plusDays(14))) {
-            // Default 2 doses a day: Morning and Evening
-            MedicineSchedule morning = new MedicineSchedule(saved, cur, LocalTime.of(8, 30), TimePeriod.MORNING, foodStr);
-            MedicineSchedule evening = new MedicineSchedule(saved, cur, LocalTime.of(20, 30), TimePeriod.EVENING, foodStr);
-
-            try {
-                medicineScheduleRepository.save(morning);
-                medicineScheduleRepository.save(evening);
-            } catch (Exception ignored) {
-                // Ignore duplicate constraint if already exists
-            }
-            cur = cur.plusDays(1);
-        }
+        generateDailySchedules(saved, request);
 
         // If follow-up date is provided, create follow-up
         if (request.getFollowUpDate() != null) {
@@ -117,6 +104,88 @@ public class PrescriptionService {
         auditService.log(doctorUserId, "CREATE_PRESCRIPTION", "PRESCRIPTION", saved.getPrescriptionId().toString(), "SUCCESS", "Prescribed: " + request.getMedicine());
 
         return saved;
+    }
+
+    @Transactional
+    public Prescription createPatientPrescription(Long patientUserId, CreatePrescriptionRequest request) {
+        Patient patient = patientRepository.findByUser_UserId(patientUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient profile not found for user: " + patientUserId));
+
+        Doctor doctor = null;
+        if (request.getDoctorId() != null) {
+            doctor = doctorRepository.findById(request.getDoctorId()).orElse(null);
+        }
+        if (doctor == null) {
+            doctor = doctorRepository.findAll().stream().findFirst().orElse(null);
+        }
+
+        Appointment appointment = null;
+        if (request.getAppointmentId() != null) {
+            appointment = appointmentRepository.findById(request.getAppointmentId()).orElse(null);
+        }
+
+        Prescription prescription = new Prescription(
+                patient, doctor, appointment,
+                request.getMedicine(), request.getDosage(), request.getRoute(),
+                request.getFrequency(), request.getStartDate(), request.getEndDate(),
+                request.getFoodInstruction(), request.getAdditionalInstructions(),
+                request.getFollowUpDate()
+        );
+
+        Prescription saved = prescriptionRepository.save(prescription);
+
+        generateDailySchedules(saved, request);
+
+        notificationService.createNotification(
+                patient.getUser(),
+                "PRESCRIPTION",
+                "New Medication Added",
+                "Medication " + request.getMedicine() + " (" + request.getDosage() + ") added to your daily schedule."
+        );
+
+        auditService.log(patientUserId, "CREATE_MEDICINE", "PRESCRIPTION", saved.getPrescriptionId().toString(), "SUCCESS", "Patient added medicine: " + request.getMedicine());
+
+        return saved;
+    }
+
+    private void generateDailySchedules(Prescription saved, CreatePrescriptionRequest request) {
+        LocalDate end = request.getEndDate() != null ? request.getEndDate() : request.getStartDate().plusDays(7);
+        LocalDate cur = request.getStartDate();
+
+        String foodStr = request.getFoodInstruction() != null ? request.getFoodInstruction().name().replace('_', ' ') : "AFTER FOOD";
+        String freqLower = request.getFrequency() != null ? request.getFrequency().toLowerCase() : "";
+
+        while (!cur.isAfter(end) && !cur.isAfter(request.getStartDate().plusDays(30))) {
+            if (freqLower.contains("bedtime") || freqLower.contains("night")) {
+                saveDose(saved, cur, LocalTime.of(21, 30), TimePeriod.BEDTIME, foodStr);
+            } else if (freqLower.contains("three") || freqLower.contains("thrice") || freqLower.contains("3")) {
+                saveDose(saved, cur, LocalTime.of(8, 30), TimePeriod.MORNING, foodStr);
+                saveDose(saved, cur, LocalTime.of(13, 30), TimePeriod.AFTERNOON, foodStr);
+                saveDose(saved, cur, LocalTime.of(20, 30), TimePeriod.EVENING, foodStr);
+            } else if (freqLower.contains("once") || freqLower.contains("1")) {
+                if (freqLower.contains("evening") || freqLower.contains("night")) {
+                    saveDose(saved, cur, LocalTime.of(20, 30), TimePeriod.EVENING, foodStr);
+                } else if (freqLower.contains("afternoon")) {
+                    saveDose(saved, cur, LocalTime.of(13, 30), TimePeriod.AFTERNOON, foodStr);
+                } else {
+                    saveDose(saved, cur, LocalTime.of(8, 30), TimePeriod.MORNING, foodStr);
+                }
+            } else {
+                // Default: 2 doses a day: Morning and Evening
+                saveDose(saved, cur, LocalTime.of(8, 30), TimePeriod.MORNING, foodStr);
+                saveDose(saved, cur, LocalTime.of(20, 30), TimePeriod.EVENING, foodStr);
+            }
+            cur = cur.plusDays(1);
+        }
+    }
+
+    private void saveDose(Prescription rx, LocalDate date, LocalTime time, TimePeriod period, String food) {
+        try {
+            MedicineSchedule schedule = new MedicineSchedule(rx, date, time, period, food);
+            medicineScheduleRepository.save(schedule);
+        } catch (Exception ignored) {
+            // Ignore duplicate constraint if already exists
+        }
     }
 
     @Transactional(readOnly = true)

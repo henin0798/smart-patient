@@ -24,7 +24,7 @@ public class Prescription {
     private Patient patient;
 
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "doctor_id", nullable = false)
+    @JoinColumn(name = "doctor_id", nullable = true)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Doctor doctor;
 
@@ -207,3 +207,4 @@ public class Prescription {
         return updatedAt;
     }
 }
+

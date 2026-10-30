@@ -36,11 +36,16 @@ public class PrescriptionController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('DOCTOR')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'PATIENT')")
     public ResponseEntity<ApiResponse<Prescription>> createPrescription(
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody CreatePrescriptionRequest request) {
-        Prescription created = prescriptionService.createPrescription(principal.getUserId(), request);
+        Prescription created;
+        if (principal.getRole() == UserRole.DOCTOR) {
+            created = prescriptionService.createPrescription(principal.getUserId(), request);
+        } else {
+            created = prescriptionService.createPatientPrescription(principal.getUserId(), request);
+        }
         return ResponseEntity.ok(ApiResponse.success("Prescription created and daily schedule initiated.", created));
     }
 

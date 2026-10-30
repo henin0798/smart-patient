@@ -4,7 +4,11 @@ import com.smartpatient.common.response.ApiResponse;
 import com.smartpatient.medicine.entity.DoseStatus;
 import com.smartpatient.medicine.entity.MedicineSchedule;
 import com.smartpatient.medicine.service.MedicineService;
+import com.smartpatient.prescription.dto.CreatePrescriptionRequest;
+import com.smartpatient.prescription.entity.Prescription;
+import com.smartpatient.prescription.service.PrescriptionService;
 import com.smartpatient.security.UserPrincipal;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,9 +24,11 @@ import java.util.Map;
 public class MedicineController {
 
     private final MedicineService medicineService;
+    private final PrescriptionService prescriptionService;
 
-    public MedicineController(MedicineService medicineService) {
+    public MedicineController(MedicineService medicineService, PrescriptionService prescriptionService) {
         this.medicineService = medicineService;
+        this.prescriptionService = prescriptionService;
     }
 
     @GetMapping("/today")
@@ -30,6 +36,15 @@ public class MedicineController {
     public ResponseEntity<ApiResponse<List<MedicineSchedule>>> getTodaySchedules(@AuthenticationPrincipal UserPrincipal principal) {
         List<MedicineSchedule> schedules = medicineService.getTodaySchedules(principal.getUserId());
         return ResponseEntity.ok(ApiResponse.success(schedules));
+    }
+
+    @PostMapping
+    @PreAuthorize("hasRole('PATIENT')")
+    public ResponseEntity<ApiResponse<Prescription>> addMedicineSchedule(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody CreatePrescriptionRequest request) {
+        Prescription created = prescriptionService.createPatientPrescription(principal.getUserId(), request);
+        return ResponseEntity.ok(ApiResponse.success("Medicine added to tracker and daily schedule initiated.", created));
     }
 
     @GetMapping("/history")

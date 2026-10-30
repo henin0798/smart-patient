@@ -7,8 +7,9 @@ import java.time.LocalDate;
 
 public class CreatePrescriptionRequest {
 
-    @NotNull(message = "Patient ID is required")
     private Long patientId;
+
+    private Long doctorId;
 
     private Long appointmentId;
 
@@ -42,6 +43,14 @@ public class CreatePrescriptionRequest {
 
     public void setPatientId(Long patientId) {
         this.patientId = patientId;
+    }
+
+    public Long getDoctorId() {
+        return doctorId;
+    }
+
+    public void setDoctorId(Long doctorId) {
+        this.doctorId = doctorId;
     }
 
     public Long getAppointmentId() {
