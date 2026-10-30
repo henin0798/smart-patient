@@ -10,4 +10,5 @@ import java.util.List;
 public interface ReportValueRepository extends JpaRepository<ReportValue, Long> {
     List<ReportValue> findByReport_ReportId(Long reportId);
     List<ReportValue> findByReport_Patient_PatientIdAndNormalizedTestKey(Long patientId, String normalizedTestKey);
+    void deleteByReport_ReportId(Long reportId);
 }

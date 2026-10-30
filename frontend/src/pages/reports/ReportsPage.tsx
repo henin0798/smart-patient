@@ -1,40 +1,80 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, getToken } from '../../lib/api-client';
-import { MedicalReport, ReportType, ReportComparisonResult, ReportValue } from '../../types';
+import { api } from '../../lib/api-client';
+import { useAuth } from '../../context/AuthContext';
+import {
+  MedicalReport,
+  ReportType,
+  ReportComparisonResult,
+  SavedReportComparison,
+} from '../../types';
+import { printOrDownloadComparisonPdf } from '../../utils/reportPdfGenerator';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+} from 'recharts';
 import {
   FileText,
   Upload,
   Download,
   Eye,
   TrendingUp,
+  TrendingDown,
+  Minus,
   Plus,
   Trash2,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Layers,
-  ArrowRight,
   ShieldAlert,
-  ExternalLink,
+  Search,
+  Filter,
+  History,
+  Printer,
+  Calendar,
+  Activity,
+  ArrowUpDown,
+  FileCheck,
 } from 'lucide-react';
-import { Card, CardHeader } from '../../components/ui/Card';
+import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Dialog } from '../../components/ui/Dialog';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 
+type TabSelection = ReportType | 'ALL' | 'COMPARISONS';
+
 export const ReportsPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<ReportType>('LAB');
+  // Active top-level tab
+  const [activeTab, setActiveTab] = useState<TabSelection>('ALL');
+
+  // Search, Filter & Sort State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'title'>('newest');
+
+  // Modals state
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [previewReport, setPreviewReport] = useState<MedicalReport | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [deleteComparisonConfirmId, setDeleteComparisonConfirmId] = useState<number | null>(null);
 
-  // Compare selection state
+  // Comparison State
   const [olderReportId, setOlderReportId] = useState<number | null>(null);
   const [newerReportId, setNewerReportId] = useState<number | null>(null);
   const [comparisonResult, setComparisonResult] = useState<ReportComparisonResult | null>(null);
+  const [compareError, setCompareError] = useState<string | null>(null);
 
   // Upload Form State
   const [uploadTitle, setUploadTitle] = useState('');
@@ -47,26 +87,63 @@ export const ReportsPage: React.FC = () => {
   >([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
-  const [compareError, setCompareError] = useState<string | null>(null);
 
   // Query patient reports
-  const { data: reports = [], isLoading } = useQuery<MedicalReport[]>({
-    queryKey: ['medical-reports', activeTab],
-    queryFn: () => api.get<MedicalReport[]>(`/reports?type=${activeTab}`),
+  const { data: allReports = [], isLoading: isLoadingReports } = useQuery<MedicalReport[]>({
+    queryKey: ['medical-reports'],
+    queryFn: () => api.get<MedicalReport[]>('/reports'),
   });
 
-  // Query all lab reports (for compare dropdown)
-  const { data: allLabReports = [] } = useQuery<MedicalReport[]>({
-    queryKey: ['medical-reports-all-lab'],
-    queryFn: () => api.get<MedicalReport[]>('/reports?type=LAB'),
+  // Query comparison history
+  const { data: savedComparisons = [], isLoading: isLoadingComparisons } = useQuery<SavedReportComparison[]>({
+    queryKey: ['report-comparisons'],
+    queryFn: () => api.get<SavedReportComparison[]>('/reports/comparisons'),
   });
+
+  // Filtered Lab Reports for the comparison dropdowns
+  const allLabReports = useMemo(() => {
+    return allReports.filter((r) => r.reportType === 'LAB');
+  }, [allReports]);
+
+  // Filtered & Sorted reports based on search, active tab and sorting
+  const filteredReports = useMemo(() => {
+    let result = [...allReports];
+
+    // Filter by tab if not ALL and not COMPARISONS
+    if (activeTab !== 'ALL' && activeTab !== 'COMPARISONS') {
+      result = result.filter((r) => r.reportType === activeTab);
+    }
+
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter(
+        (r) =>
+          r.reportTitle.toLowerCase().includes(q) ||
+          r.originalFilename.toLowerCase().includes(q) ||
+          (r.description && r.description.toLowerCase().includes(q))
+      );
+    }
+
+    // Sort order
+    result.sort((a, b) => {
+      if (sortOrder === 'newest') {
+        return new Date(b.reportDate).getTime() - new Date(a.reportDate).getTime();
+      } else if (sortOrder === 'oldest') {
+        return new Date(a.reportDate).getTime() - new Date(b.reportDate).getTime();
+      } else {
+        return a.reportTitle.localeCompare(b.reportTitle);
+      }
+    });
+
+    return result;
+  }, [allReports, activeTab, searchTerm, sortOrder]);
 
   // Upload Mutation
   const uploadMutation = useMutation({
     mutationFn: (formData: FormData) => api.post<any>('/reports/upload', formData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['medical-reports'] });
-      queryClient.invalidateQueries({ queryKey: ['medical-reports-all-lab'] });
       queryClient.invalidateQueries({ queryKey: ['patient-dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['patient-timeline'] });
       setIsUploadModalOpen(false);
@@ -77,6 +154,21 @@ export const ReportsPage: React.FC = () => {
     },
   });
 
+  // Delete Report Mutation
+  const deleteMutation = useMutation({
+    mutationFn: (reportId: number) => api.delete(`/reports/${reportId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['medical-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['report-comparisons'] });
+      queryClient.invalidateQueries({ queryKey: ['patient-dashboard-summary'] });
+      setDeleteConfirmId(null);
+    },
+    onError: (err: any) => {
+      setPageError(err.message || 'Failed to delete report.');
+      setDeleteConfirmId(null);
+    },
+  });
+
   // Compare Mutation
   const compareMutation = useMutation({
     mutationFn: (body: { olderReportId: number; newerReportId: number }) =>
@@ -84,11 +176,39 @@ export const ReportsPage: React.FC = () => {
     onSuccess: (data) => {
       setComparisonResult(data);
       setCompareError(null);
+      queryClient.invalidateQueries({ queryKey: ['report-comparisons'] });
     },
     onError: (err: any) => {
       setCompareError(err.message || 'Comparison failed.');
     },
   });
+
+  // Delete Comparison Mutation
+  const deleteComparisonMutation = useMutation({
+    mutationFn: (comparisonId: number) => api.delete(`/reports/comparisons/${comparisonId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['report-comparisons'] });
+      setDeleteComparisonConfirmId(null);
+      if (comparisonResult && comparisonResult.comparisonId === deleteComparisonConfirmId) {
+        setComparisonResult(null);
+      }
+    },
+    onError: (err: any) => {
+      setPageError(err.message || 'Failed to delete saved comparison.');
+      setDeleteComparisonConfirmId(null);
+    },
+  });
+
+  // Load single comparison detail
+  const loadSavedComparisonDetail = async (comp: SavedReportComparison) => {
+    try {
+      const data = await api.get<ReportComparisonResult>(`/reports/comparisons/${comp.comparisonId}`);
+      setComparisonResult(data);
+      setIsCompareModalOpen(true);
+    } catch (err: any) {
+      setPageError(err.message || 'Failed to load comparison details.');
+    }
+  };
 
   const resetUploadForm = () => {
     setUploadTitle('');
@@ -126,15 +246,14 @@ export const ReportsPage: React.FC = () => {
     formData.append('reportDate', uploadDate);
     if (uploadDesc) formData.append('description', uploadDesc);
 
-    // Format structured values
-    if (structuredValues.length > 0) {
+    if (uploadType === 'LAB' && structuredValues.length > 0) {
       const formatted = structuredValues
         .filter((v) => v.testName.trim() && v.numericValue.trim())
         .map((v) => ({
-          testName: v.testName,
+          testName: v.testName.trim(),
           normalizedTestKey: v.testName.trim().toUpperCase().replace(/\s+/g, '_'),
           numericValue: parseFloat(v.numericValue),
-          unit: v.unit,
+          unit: v.unit.trim(),
           referenceRangeMin: v.min ? parseFloat(v.min) : null,
           referenceRangeMax: v.max ? parseFloat(v.max) : null,
         }));
@@ -174,14 +293,64 @@ export const ReportsPage: React.FC = () => {
     compareMutation.mutate({ olderReportId, newerReportId });
   };
 
+  const handleDownloadPdf = () => {
+    if (!comparisonResult) return;
+    printOrDownloadComparisonPdf(comparisonResult, {
+      patientName: user?.fullName,
+      patientCode: user?.patientCode,
+    });
+  };
+
+  // Recharts data preparation for the comparison
+  const chartData = useMemo(() => {
+    if (!comparisonResult?.matchedMetrics) return [];
+    return comparisonResult.matchedMetrics.map((m) => ({
+      name: m.testName.length > 15 ? m.testName.slice(0, 15) + '…' : m.testName,
+      fullName: m.testName,
+      unit: m.unit,
+      Baseline: m.olderValue,
+      FollowUp: m.newerValue,
+      difference: m.difference,
+      trend: m.trend,
+    }));
+  }, [comparisonResult]);
+
+  const getReportTypeBadge = (type: ReportType) => {
+    switch (type) {
+      case 'LAB':
+        return <Badge variant="teal" size="sm">Lab Report</Badge>;
+      case 'SCAN':
+        return <Badge variant="primary" size="sm">Diagnostic Scan</Badge>;
+      case 'PRESCRIPTION':
+        return <Badge variant="warning" size="sm">Prescription</Badge>;
+      case 'CERTIFICATE':
+        return <Badge variant="info" size="sm">Certificate</Badge>;
+      default:
+        return <Badge variant="neutral" size="sm">{type}</Badge>;
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Page Notification Alerts */}
+      {pageError && (
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-brand-error text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{pageError}</span>
+          </div>
+          <button onClick={() => setPageError(null)} className="text-xs font-bold hover:underline">
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-brand-navy">Medical Reports & Scans</h1>
+          <h1 className="text-2xl font-bold text-brand-navy">Medical Documents & Analytics</h1>
           <p className="text-sm text-brand-muted mt-1">
-            Access your encrypted laboratory records, diagnostic scans, and compare changes over time.
+            Securely store, organize, search, and analyze your longitudinal health reports and clinical scans.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -213,116 +382,518 @@ export const ReportsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center space-x-2 border-b border-brand-border pb-2">
+      {/* Navigation Tabs */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-brand-border pb-2">
+        <button
+          onClick={() => setActiveTab('ALL')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+            activeTab === 'ALL'
+              ? 'bg-brand-navy text-white shadow-sm'
+              : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          <span>All Documents ({allReports.length})</span>
+        </button>
         <button
           onClick={() => setActiveTab('LAB')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
             activeTab === 'LAB'
               ? 'bg-brand-navy text-white shadow-sm'
               : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
           }`}
         >
-          <FileText className="w-4 h-4" />
-          <span>Laboratory Reports</span>
+          <FileText className="w-3.5 h-3.5" />
+          <span>Lab Reports</span>
         </button>
         <button
           onClick={() => setActiveTab('SCAN')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
             activeTab === 'SCAN'
               ? 'bg-brand-navy text-white shadow-sm'
               : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
           }`}
         >
-          <Layers className="w-4 h-4" />
-          <span>Scans & Diagnostic Imaging</span>
+          <Activity className="w-3.5 h-3.5" />
+          <span>Imaging & Scans</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('PRESCRIPTION')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+            activeTab === 'PRESCRIPTION'
+              ? 'bg-brand-navy text-white shadow-sm'
+              : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
+          }`}
+        >
+          <FileCheck className="w-3.5 h-3.5" />
+          <span>Prescriptions</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('CERTIFICATE')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+            activeTab === 'CERTIFICATE'
+              ? 'bg-brand-navy text-white shadow-sm'
+              : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
+          }`}
+        >
+          <FileText className="w-3.5 h-3.5" />
+          <span>Certificates</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('OTHER')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+            activeTab === 'OTHER'
+              ? 'bg-brand-navy text-white shadow-sm'
+              : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
+          }`}
+        >
+          <span>Other</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('COMPARISONS')}
+          className={`ml-auto px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+            activeTab === 'COMPARISONS'
+              ? 'bg-brand-teal text-white shadow-sm'
+              : 'text-brand-teal border border-brand-teal/40 hover:bg-brand-teal/10'
+          }`}
+        >
+          <History className="w-3.5 h-3.5" />
+          <span>Comparison History ({savedComparisons.length})</span>
         </button>
       </div>
 
-      {/* Report Cards Grid */}
-      {isLoading ? (
-        <div className="py-12 text-center text-sm text-brand-muted">Loading medical documents...</div>
-      ) : reports.length === 0 ? (
-        <Card className="py-12 text-center">
-          <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="font-bold text-brand-navy">No {activeTab.toLowerCase()} documents uploaded</h3>
-          <p className="text-xs text-brand-muted mt-1">
-            Upload your existing laboratory test results or diagnostic scans.
-          </p>
-          <Button
-            variant="teal"
-            size="sm"
-            className="mt-4"
-            onClick={() => setIsUploadModalOpen(true)}
-          >
-            Upload Document
-          </Button>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {reports.map((report) => (
-            <Card key={report.reportId} hoverEffect className="flex flex-col justify-between">
-              <div>
-                <div className="flex items-start justify-between gap-2 pb-3 border-b border-brand-border">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-xl bg-brand-panel text-brand-navy flex items-center justify-center font-bold shrink-0">
-                      <FileText className="w-5 h-5 text-brand-teal" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-brand-navy line-clamp-1" title={report.reportTitle}>
-                        {report.reportTitle}
-                      </h3>
-                      <div className="text-xs text-brand-muted mt-0.5">
-                        Test Date: {report.reportDate}
-                      </div>
-                    </div>
-                  </div>
-                  <Badge variant={report.reportType === 'LAB' ? 'teal' : 'primary'} size="sm">
-                    {report.reportType}
-                  </Badge>
-                </div>
+      {/* Main Content Area */}
+      {activeTab === 'COMPARISONS' ? (
+        /* Comparison History View */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-brand-navy">Saved Laboratory Comparisons</h2>
+            <Button
+              variant="teal"
+              size="sm"
+              icon={<TrendingUp className="w-3.5 h-3.5" />}
+              onClick={() => {
+                if (allLabReports.length >= 2) {
+                  setOlderReportId(allLabReports[1].reportId);
+                  setNewerReportId(allLabReports[0].reportId);
+                }
+                setIsCompareModalOpen(true);
+              }}
+            >
+              New Comparison
+            </Button>
+          </div>
 
-                <div className="mt-3 space-y-1.5 text-xs text-brand-muted">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-slate-700">Original File:</span>
-                    <span className="font-mono truncate max-w-[200px]">{report.originalFilename}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-slate-700">Size:</span>
-                    <span>{(report.fileSize / 1024).toFixed(1)} KB</span>
-                  </div>
-                  {report.doctor && (
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-700">Ordering Doctor:</span>
-                      <span>{report.doctor.fullName}</span>
-                    </div>
-                  )}
-                  {report.description && (
-                    <p className="pt-1 text-[11px] text-slate-500 italic line-clamp-2">
-                      "{report.description}"
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-brand-border flex items-center justify-between">
-                <span className="text-[11px] text-brand-muted">
-                  Encrypted File Storage
-                </span>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    icon={<Download className="w-3.5 h-3.5" />}
-                    onClick={() => handleDownload(report.reportId, report.originalFilename)}
-                  >
-                    Download
-                  </Button>
-                </div>
-              </div>
+          {isLoadingComparisons ? (
+            <div className="py-12 text-center text-sm text-brand-muted">Loading saved comparisons...</div>
+          ) : savedComparisons.length === 0 ? (
+            <Card className="py-12 text-center">
+              <History className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h3 className="font-bold text-brand-navy">No comparisons saved yet</h3>
+              <p className="text-xs text-brand-muted mt-1 max-w-md mx-auto">
+                Compare two laboratory reports over time to track key biomakers and longitudinal trends.
+              </p>
+              <Button
+                variant="teal"
+                size="sm"
+                className="mt-4"
+                onClick={() => {
+                  if (allLabReports.length >= 2) {
+                    setOlderReportId(allLabReports[1].reportId);
+                    setNewerReportId(allLabReports[0].reportId);
+                  }
+                  setIsCompareModalOpen(true);
+                }}
+              >
+                Create Your First Comparison
+              </Button>
             </Card>
-          ))}
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {savedComparisons.map((comp) => (
+                <Card key={comp.comparisonId} hoverEffect className="flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-brand-border">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-teal-50 text-brand-teal flex items-center justify-center font-bold">
+                          <TrendingUp className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-sm text-brand-navy">{comp.comparisonTitle}</h3>
+                          <div className="text-[11px] text-brand-muted flex items-center gap-1.5 mt-0.5">
+                            <Calendar className="w-3 h-3" />
+                            <span>Saved on {new Date(comp.createdAt).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <Badge variant="teal" size="sm">
+                        ID #{comp.comparisonId}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-3 space-y-1.5 text-xs text-brand-muted">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-slate-700">Baseline Study:</span>
+                        <span className="font-semibold text-slate-800 truncate max-w-[200px]">
+                          {comp.olderReportTitle}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-slate-700">Follow-up Study:</span>
+                        <span className="font-semibold text-slate-800 truncate max-w-[200px]">
+                          {comp.newerReportTitle}
+                        </span>
+                      </div>
+                      {comp.summary && (
+                        <p className="pt-1.5 text-[11px] text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                          {comp.summary}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-brand-border flex items-center justify-between">
+                    <button
+                      onClick={() => setDeleteComparisonConfirmId(comp.comparisonId)}
+                      className="text-xs text-rose-500 hover:text-rose-700 font-medium flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={<Eye className="w-3.5 h-3.5" />}
+                        onClick={() => loadSavedComparisonDetail(comp)}
+                      >
+                        View & Analysis
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
+      ) : (
+        /* Documents Grid & Search/Filter Bar */
+        <div className="space-y-4">
+          {/* Search, Filter & Sort Bar */}
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-brand-panel/40 p-3 rounded-2xl border border-brand-border/70">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-brand-muted absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search by title, original filename, or clinical notes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-brand-border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-teal focus:border-brand-teal"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-brand-muted hover:text-brand-navy"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-brand-muted shrink-0">
+                <ArrowUpDown className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sort:</span>
+              </div>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as any)}
+                className="text-xs bg-white border border-brand-border rounded-xl px-2.5 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-teal"
+              >
+                <option value="newest">Newest Test Date First</option>
+                <option value="oldest">Oldest Test Date First</option>
+                <option value="title">Document Title (A-Z)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Document Cards Grid */}
+          {isLoadingReports ? (
+            <div className="py-12 text-center text-sm text-brand-muted">Loading medical documents...</div>
+          ) : filteredReports.length === 0 ? (
+            <Card className="py-12 text-center">
+              <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h3 className="font-bold text-brand-navy">
+                {searchTerm ? 'No matching documents found' : `No ${activeTab === 'ALL' ? '' : activeTab.toLowerCase()} documents found`}
+              </h3>
+              <p className="text-xs text-brand-muted mt-1 max-w-sm mx-auto">
+                {searchTerm
+                  ? `No records matching "${searchTerm}". Try a different keyword.`
+                  : 'Upload your laboratory test results, diagnostic scans, or prescriptions to maintain a secure encrypted digital record.'}
+              </p>
+              <Button
+                variant="teal"
+                size="sm"
+                className="mt-4"
+                onClick={() => {
+                  resetUploadForm();
+                  setIsUploadModalOpen(true);
+                }}
+              >
+                Upload Document
+              </Button>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredReports.map((report) => (
+                <Card key={report.reportId} hoverEffect className="flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-start justify-between gap-2 pb-3 border-b border-brand-border">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-xl bg-brand-panel text-brand-navy flex items-center justify-center font-bold shrink-0">
+                          {report.reportType === 'SCAN' ? (
+                            <Activity className="w-5 h-5 text-sky-600" />
+                          ) : (
+                            <FileText className="w-5 h-5 text-brand-teal" />
+                          )}
+                        </div>
+                        <div>
+                          <h3
+                            className="font-bold text-sm text-brand-navy line-clamp-1 hover:text-brand-teal cursor-pointer"
+                            title={report.reportTitle}
+                            onClick={() => setPreviewReport(report)}
+                          >
+                            {report.reportTitle}
+                          </h3>
+                          <div className="text-xs text-brand-muted mt-0.5 flex items-center gap-1.5">
+                            <Calendar className="w-3 h-3" />
+                            <span>Test Date: {report.reportDate}</span>
+                          </div>
+                        </div>
+                      </div>
+                      {getReportTypeBadge(report.reportType)}
+                    </div>
+
+                    <div className="mt-3 space-y-1.5 text-xs text-brand-muted">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-slate-700">Original File:</span>
+                        <span className="font-mono truncate max-w-[180px] text-slate-800" title={report.originalFilename}>
+                          {report.originalFilename}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-slate-700">Size & Type:</span>
+                        <span>
+                          {(report.fileSize / 1024).toFixed(1)} KB &bull; {report.mimeType.split('/')[1]?.toUpperCase() || 'FILE'}
+                        </span>
+                      </div>
+                      {report.doctor && (
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-slate-700">Ordering Doctor:</span>
+                          <span className="font-semibold text-slate-800">{report.doctor.fullName}</span>
+                        </div>
+                      )}
+                      {report.reportValues && report.reportValues.length > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-slate-700">Structured Parameters:</span>
+                          <Badge variant="teal" size="sm">
+                            {report.reportValues.length} tests recorded
+                          </Badge>
+                        </div>
+                      )}
+                      {report.description && (
+                        <p className="pt-1 text-[11px] text-slate-500 italic line-clamp-2">
+                          "{report.description}"
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-brand-border flex items-center justify-between">
+                    <button
+                      onClick={() => setDeleteConfirmId(report.reportId)}
+                      className="text-xs text-rose-500 hover:text-rose-700 font-medium flex items-center gap-1"
+                      title="Delete record"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={<Eye className="w-3.5 h-3.5" />}
+                        onClick={() => setPreviewReport(report)}
+                      >
+                        Preview
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        icon={<Download className="w-3.5 h-3.5" />}
+                        onClick={() => handleDownload(report.reportId, report.originalFilename)}
+                      >
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Delete Report Confirmation Dialog */}
+      <Dialog
+        isOpen={deleteConfirmId !== null}
+        onClose={() => setDeleteConfirmId(null)}
+        title="Confirm Permanent Deletion"
+        description="Are you sure you want to delete this medical report? This action permanently purges the stored encrypted document and structured values."
+        maxWidth="md"
+      >
+        <div className="flex justify-end gap-3 pt-3">
+          <Button variant="outline" size="sm" onClick={() => setDeleteConfirmId(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            isLoading={deleteMutation.isPending}
+            onClick={() => {
+              if (deleteConfirmId !== null) {
+                deleteMutation.mutate(deleteConfirmId);
+              }
+            }}
+          >
+            Permanently Delete
+          </Button>
+        </div>
+      </Dialog>
+
+      {/* Delete Comparison Confirmation Dialog */}
+      <Dialog
+        isOpen={deleteComparisonConfirmId !== null}
+        onClose={() => setDeleteComparisonConfirmId(null)}
+        title="Delete Saved Comparison"
+        description="Are you sure you want to remove this comparison record from your history? The underlying medical documents will remain intact."
+        maxWidth="md"
+      >
+        <div className="flex justify-end gap-3 pt-3">
+          <Button variant="outline" size="sm" onClick={() => setDeleteComparisonConfirmId(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            isLoading={deleteComparisonMutation.isPending}
+            onClick={() => {
+              if (deleteComparisonConfirmId !== null) {
+                deleteComparisonMutation.mutate(deleteComparisonConfirmId);
+              }
+            }}
+          >
+            Delete Comparison
+          </Button>
+        </div>
+      </Dialog>
+
+      {/* Document Preview & Details Modal */}
+      {previewReport && (
+        <Dialog
+          isOpen={true}
+          onClose={() => setPreviewReport(null)}
+          title={previewReport.reportTitle}
+          description={`Recorded on ${previewReport.reportDate} • Category: ${previewReport.reportType}`}
+          maxWidth="2xl"
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 p-3.5 bg-brand-panel/50 rounded-xl text-xs border border-brand-border">
+              <div>
+                <span className="font-semibold text-slate-700">Filename:</span>
+                <p className="font-mono text-slate-900 mt-0.5 truncate">{previewReport.originalFilename}</p>
+              </div>
+              <div>
+                <span className="font-semibold text-slate-700">File Size:</span>
+                <p className="text-slate-900 mt-0.5">{(previewReport.fileSize / 1024).toFixed(1)} KB</p>
+              </div>
+              {previewReport.doctor && (
+                <div className="col-span-2">
+                  <span className="font-semibold text-slate-700">Authoring / Reviewing Doctor:</span>
+                  <p className="text-slate-900 mt-0.5">{previewReport.doctor.fullName} ({previewReport.doctor.specialty})</p>
+                </div>
+              )}
+              {previewReport.description && (
+                <div className="col-span-2">
+                  <span className="font-semibold text-slate-700">Clinical Notes:</span>
+                  <p className="text-slate-900 mt-0.5 italic">{previewReport.description}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Structured Values Table (if any) */}
+            {previewReport.reportValues && previewReport.reportValues.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold text-brand-navy mb-2 flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-brand-teal" />
+                  <span>Structured Lab Parameters ({previewReport.reportValues.length})</span>
+                </h4>
+                <div className="overflow-x-auto rounded-xl border border-brand-border">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-brand-navy text-white text-[11px] uppercase">
+                      <tr>
+                        <th className="py-2.5 px-3">Test Name</th>
+                        <th className="py-2.5 px-3">Result Value</th>
+                        <th className="py-2.5 px-3">Reference Range</th>
+                        <th className="py-2.5 px-3">Interpretation</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-brand-border bg-white">
+                      {previewReport.reportValues.map((v, i) => (
+                        <tr key={i} className="hover:bg-slate-50">
+                          <td className="py-2.5 px-3 font-medium text-slate-900">{v.testName}</td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-brand-navy">
+                            {v.numericValue} {v.unit}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
+                            {v.referenceRangeMin !== null && v.referenceRangeMax !== null
+                              ? `${v.referenceRangeMin} - ${v.referenceRangeMax}`
+                              : 'Not specified'}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                v.interpretation === 'HIGH' || v.interpretation === 'LOW'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-emerald-100 text-emerald-800'
+                              }`}
+                            >
+                              {v.interpretation || 'NORMAL'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center pt-3 border-t border-brand-border">
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Download className="w-3.5 h-3.5" />}
+                onClick={() => handleDownload(previewReport.reportId, previewReport.originalFilename)}
+              >
+                Download Stored Document
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setPreviewReport(null)}>
+                Close Preview
+              </Button>
+            </div>
+          </div>
+        </Dialog>
       )}
 
       {/* Upload Document Modal Dialog */}
@@ -330,7 +901,7 @@ export const ReportsPage: React.FC = () => {
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         title="Upload Medical Document"
-        description="Add previous laboratory results or scan images to your Patient ID record."
+        description="Add previous laboratory results, diagnostic scans, prescriptions or medical certificates to your Patient ID record."
         maxWidth="lg"
       >
         <form onSubmit={handleUploadSubmit} className="space-y-4">
@@ -342,25 +913,28 @@ export const ReportsPage: React.FC = () => {
           )}
 
           <Input
-            label="Report Title"
+            label="Document Title"
             required
-            placeholder="e.g. Comprehensive Lipid Profile, Chest X-Ray"
+            placeholder="e.g. Comprehensive Lipid Profile, Chest X-Ray, Discharge Summary"
             value={uploadTitle}
             onChange={(e) => setUploadTitle(e.target.value)}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select
-              label="Document Type"
+              label="Document Category"
               value={uploadType}
               onChange={(e) => setUploadType(e.target.value as ReportType)}
               options={[
                 { value: 'LAB', label: 'Laboratory Blood Test (LAB)' },
-                { value: 'SCAN', label: 'Imaging & Scan (SCAN)' },
+                { value: 'SCAN', label: 'Imaging & Diagnostic Scan (SCAN)' },
+                { value: 'PRESCRIPTION', label: 'Doctor Prescription (PRESCRIPTION)' },
+                { value: 'CERTIFICATE', label: 'Medical Certificate (CERTIFICATE)' },
+                { value: 'OTHER', label: 'Other Medical Record (OTHER)' },
               ]}
             />
             <Input
-              label="Report Date"
+              label="Document Date"
               type="date"
               required
               value={uploadDate}
@@ -386,7 +960,7 @@ export const ReportsPage: React.FC = () => {
 
           <Input
             label="Notes / Clinical Impression (Optional)"
-            placeholder="e.g. Baseline blood test before initiating statin therapy"
+            placeholder="e.g. Baseline blood test before initiating treatment"
             value={uploadDesc}
             onChange={(e) => setUploadDesc(e.target.value)}
           />
@@ -398,7 +972,7 @@ export const ReportsPage: React.FC = () => {
                 <div>
                   <div className="text-xs font-bold text-brand-navy">Structured Test Values</div>
                   <div className="text-[11px] text-brand-muted">
-                    Enter key values for automatic longitudinal comparison
+                    Enter key values for automatic longitudinal comparison and trend charts
                   </div>
                 </div>
                 <Button
@@ -417,7 +991,7 @@ export const ReportsPage: React.FC = () => {
                   <div className="col-span-4">
                     <input
                       type="text"
-                      placeholder="Test (e.g. Total Cholesterol)"
+                      placeholder="Test Name (e.g. Cholesterol)"
                       value={row.testName}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -488,6 +1062,7 @@ export const ReportsPage: React.FC = () => {
                       type="button"
                       onClick={() => handleRemoveStructuredValue(index)}
                       className="text-slate-400 hover:text-brand-error"
+                      title="Remove test"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -518,15 +1093,15 @@ export const ReportsPage: React.FC = () => {
         </form>
       </Dialog>
 
-      {/* Compare Reports Modal Dialog */}
+      {/* Compare Reports Modal Dialog with Visual Charts, Analysis Cards & PDF Download */}
       <Dialog
         isOpen={isCompareModalOpen}
         onClose={() => {
           setIsCompareModalOpen(false);
           setComparisonResult(null);
         }}
-        title="Compare Laboratory Reports"
-        description="Select two historical blood tests to evaluate longitudinal changes side-by-side."
+        title="Longitudinal Laboratory Comparison"
+        description="Select two laboratory tests to track biomakers and generate clinical trend analytics."
         maxWidth="4xl"
       >
         <div className="space-y-6">
@@ -573,106 +1148,256 @@ export const ReportsPage: React.FC = () => {
                 isLoading={compareMutation.isPending}
                 icon={<TrendingUp className="w-4 h-4" />}
               >
-                Generate Comparison Table
+                Generate Longitudinal Analysis
               </Button>
             </div>
           </div>
 
-          {/* Comparison Results Table */}
+          {/* Comparison Results Area */}
           {comparisonResult && (
-            <div className="space-y-4">
-              {/* Disclaimer */}
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-start gap-2.5">
-                <ShieldAlert className="w-4 h-4 text-brand-warning shrink-0 mt-0.5" />
+            <div className="space-y-5">
+              {/* Actions Header Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <div>
+                  <h3 className="text-sm font-bold text-brand-navy">
+                    Comparative Study: {comparisonResult.olderReportTitle} vs {comparisonResult.newerReportTitle}
+                  </h3>
+                  <p className="text-[11px] text-brand-muted mt-0.5">
+                    Baseline: {comparisonResult.olderReportDate} &bull; Follow-up: {comparisonResult.newerReportDate}
+                  </p>
+                </div>
+                <Button
+                  variant="teal"
+                  size="sm"
+                  icon={<Printer className="w-3.5 h-3.5" />}
+                  onClick={handleDownloadPdf}
+                >
+                  Download / Print PDF
+                </Button>
+              </div>
+
+              {/* Mandatory Medical Disclaimer */}
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-start gap-2.5">
+                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <span className="leading-relaxed font-medium">
                   {comparisonResult.disclaimer}
                 </span>
               </div>
 
-              {/* Matched Metrics Table */}
+              {/* Structured Metric Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl">
+                  <div className="text-[11px] font-semibold text-sky-800 flex items-center gap-1">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>Increased</span>
+                  </div>
+                  <div className="text-xl font-bold text-sky-900 mt-1">
+                    {comparisonResult.increasedCount ?? comparisonResult.matchedMetrics.filter((m) => m.trend === 'INCREASED').length}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <div className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1">
+                    <TrendingDown className="w-3.5 h-3.5" />
+                    <span>Decreased</span>
+                  </div>
+                  <div className="text-xl font-bold text-emerald-900 mt-1">
+                    {comparisonResult.decreasedCount ?? comparisonResult.matchedMetrics.filter((m) => m.trend === 'DECREASED').length}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+                    <Minus className="w-3.5 h-3.5" />
+                    <span>Stable / Unchanged</span>
+                  </div>
+                  <div className="text-xl font-bold text-slate-800 mt-1">
+                    {comparisonResult.stableCount ?? comparisonResult.matchedMetrics.filter((m) => m.trend === 'UNCHANGED').length}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl">
+                  <div className="text-[11px] font-semibold text-rose-800 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>Out of Range</span>
+                  </div>
+                  <div className="text-xl font-bold text-rose-900 mt-1">
+                    {comparisonResult.outOfRangeCount ?? comparisonResult.matchedMetrics.filter((m) => m.newerStatus !== 'NORMAL').length}
+                  </div>
+                </div>
+              </div>
+
+              {/* Executive Clinical Observation Summary */}
+              {comparisonResult.summary && (
+                <div className="p-3.5 bg-teal-50/80 border border-teal-200 rounded-xl text-xs text-teal-900 leading-relaxed">
+                  <strong className="font-bold text-teal-950">Clinical Summary: </strong>
+                  {comparisonResult.summary}
+                </div>
+              )}
+
+              {/* Visual Comparative Bar Chart */}
+              {chartData.length > 0 && (
+                <div className="p-4 bg-white rounded-xl border border-brand-border space-y-2">
+                  <h4 className="text-xs font-bold text-brand-navy flex items-center gap-1.5">
+                    <Activity className="w-4 h-4 text-brand-teal" />
+                    <span>Biomarker Comparison Chart (Baseline vs Follow-up)</span>
+                  </h4>
+                  <div className="h-64 w-full pt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} margin={{ top: 10, right: 20, left: -10, bottom: 25 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis
+                          dataKey="name"
+                          angle={-20}
+                          textAnchor="end"
+                          interval={0}
+                          tick={{ fontSize: 10, fill: '#475569' }}
+                        />
+                        <YAxis tick={{ fontSize: 10, fill: '#475569' }} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#0f172a',
+                            borderRadius: '8px',
+                            color: '#ffffff',
+                            fontSize: '11px',
+                            border: 'none',
+                          }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                        <Bar dataKey="Baseline" fill="#94a3b8" radius={[4, 4, 0, 0]} name={`Baseline (${comparisonResult.olderReportDate})`} />
+                        <Bar dataKey="FollowUp" fill="#0d9488" radius={[4, 4, 0, 0]} name={`Follow-up (${comparisonResult.newerReportDate})`} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Matched Metrics Detailed Table */}
               <div className="overflow-x-auto rounded-xl border border-brand-border">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-brand-navy text-white text-[11px] uppercase tracking-wider">
                     <tr>
-                      <th className="py-3 px-4">Test Name</th>
-                      <th className="py-3 px-4">
+                      <th className="py-3 px-3.5">Test Parameter</th>
+                      <th className="py-3 px-3.5">
                         Baseline ({comparisonResult.olderReportDate})
                       </th>
-                      <th className="py-3 px-4">
+                      <th className="py-3 px-3.5">
                         Follow-up ({comparisonResult.newerReportDate})
                       </th>
-                      <th className="py-3 px-4">Difference</th>
-                      <th className="py-3 px-4">% Change</th>
-                      <th className="py-3 px-4">Trend</th>
-                      <th className="py-3 px-4">Ref Range</th>
+                      <th className="py-3 px-3.5">Difference</th>
+                      <th className="py-3 px-3.5">% Change</th>
+                      <th className="py-3 px-3.5">Trend</th>
+                      <th className="py-3 px-3.5">Ref Range</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border bg-white">
-                    {comparisonResult.matchedMetrics.map((metric) => (
-                      <tr key={metric.normalizedTestKey} className="hover:bg-slate-50 transition">
-                        <td className="py-3 px-4 font-semibold text-brand-navy">
-                          {metric.testName}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="font-mono font-medium">
-                            {metric.olderValue} {metric.unit}
-                          </span>
-                          <span className="ml-1 text-[10px] text-brand-muted">
-                            ({metric.olderStatus})
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="font-mono font-bold text-brand-navy">
-                            {metric.newerValue} {metric.unit}
-                          </span>
-                          <span className="ml-1 text-[10px] text-brand-muted">
-                            ({metric.newerStatus})
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-mono font-semibold">
-                          <span className={metric.difference < 0 ? 'text-brand-success' : metric.difference > 0 ? 'text-brand-info' : 'text-slate-600'}>
-                            {metric.difference > 0 ? `+${metric.difference}` : metric.difference} {metric.unit}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-mono font-bold">
-                          {metric.percentageDifference !== undefined ? (
-                            <span
-                              className={`px-2 py-0.5 rounded ${
-                                metric.percentageDifference < 0
-                                  ? 'bg-emerald-100 text-brand-success'
-                                  : 'bg-sky-100 text-brand-info'
-                              }`}
-                            >
-                              {metric.percentageDifference > 0 ? `+${metric.percentageDifference}%` : `${metric.percentageDifference}%`}
+                    {comparisonResult.matchedMetrics.map((metric) => {
+                      const isOor = metric.newerStatus !== 'NORMAL';
+                      return (
+                        <tr
+                          key={metric.normalizedTestKey}
+                          className={`hover:bg-slate-50 transition ${isOor ? 'bg-amber-50/40' : ''}`}
+                        >
+                          <td className="py-3 px-3.5 font-semibold text-brand-navy">
+                            {metric.testName}
+                          </td>
+                          <td className="py-3 px-3.5 font-mono">
+                            <span className="font-medium text-slate-700">
+                              {metric.olderValue} {metric.unit}
                             </span>
-                          ) : (
-                            'N/A'
-                          )}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge
-                            variant={
-                              metric.trend === 'DECREASED'
-                                ? 'success'
-                                : metric.trend === 'INCREASED'
-                                ? 'info'
-                                : 'neutral'
-                            }
-                            size="sm"
-                          >
-                            {metric.trend}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-brand-muted font-mono text-[11px]">
-                          {metric.referenceRangeMin !== undefined && metric.referenceRangeMax !== undefined
-                            ? `${metric.referenceRangeMin} - ${metric.referenceRangeMax}`
-                            : 'N/A'}
-                        </td>
-                      </tr>
-                    ))}
+                            <span className="ml-1 text-[10px] text-brand-muted">
+                              ({metric.olderStatus})
+                            </span>
+                          </td>
+                          <td className="py-3 px-3.5 font-mono">
+                            <span className={`font-bold ${isOor ? 'text-amber-800' : 'text-brand-navy'}`}>
+                              {metric.newerValue} {metric.unit}
+                            </span>
+                            <span className={`ml-1 text-[10px] ${isOor ? 'text-amber-700 font-bold' : 'text-brand-muted'}`}>
+                              ({metric.newerStatus})
+                            </span>
+                          </td>
+                          <td className="py-3 px-3.5 font-mono font-semibold">
+                            <span
+                              className={
+                                metric.difference < 0
+                                  ? 'text-emerald-600'
+                                  : metric.difference > 0
+                                  ? 'text-sky-600'
+                                  : 'text-slate-600'
+                              }
+                            >
+                              {metric.difference > 0 ? `+${metric.difference}` : metric.difference} {metric.unit}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3.5 font-mono font-bold">
+                            {metric.percentageDifference !== undefined ? (
+                              <span
+                                className={`px-2 py-0.5 rounded text-[11px] ${
+                                  metric.percentageDifference < 0
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-sky-100 text-sky-800'
+                                }`}
+                              >
+                                {metric.percentageDifference > 0
+                                  ? `+${metric.percentageDifference}%`
+                                  : `${metric.percentageDifference}%`}
+                              </span>
+                            ) : (
+                              'N/A'
+                            )}
+                          </td>
+                          <td className="py-3 px-3.5">
+                            <Badge
+                              variant={
+                                metric.trend === 'DECREASED'
+                                  ? 'success'
+                                  : metric.trend === 'INCREASED'
+                                  ? 'info'
+                                  : 'neutral'
+                              }
+                              size="sm"
+                            >
+                              {metric.trend}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-3.5 text-brand-muted font-mono text-[11px]">
+                            {metric.referenceRangeMin !== undefined && metric.referenceRangeMax !== undefined
+                              ? `${metric.referenceRangeMin} - ${metric.referenceRangeMax}`
+                              : 'N/A'}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+
+              {/* Unmatched Metrics Notice (if any) */}
+              {(comparisonResult.olderOnlyMetrics.length > 0 || comparisonResult.newerOnlyMetrics.length > 0) && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 text-slate-600">
+                  <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Non-overlapping parameters noted</span>
+                  </div>
+                  {comparisonResult.olderOnlyMetrics.length > 0 && (
+                    <div>
+                      Tested in Baseline only:{' '}
+                      <span className="font-medium text-slate-700">
+                        {comparisonResult.olderOnlyMetrics.map((m) => m.testName).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {comparisonResult.newerOnlyMetrics.length > 0 && (
+                    <div>
+                      Tested in Follow-up only:{' '}
+                      <span className="font-medium text-slate-700">
+                        {comparisonResult.newerOnlyMetrics.map((m) => m.testName).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

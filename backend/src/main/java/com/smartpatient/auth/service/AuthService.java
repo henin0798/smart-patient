@@ -3,12 +3,16 @@ package com.smartpatient.auth.service;
 import com.smartpatient.audit.service.AuditService;
 import com.smartpatient.auth.dto.AuthResponse;
 import com.smartpatient.auth.dto.LoginRequest;
+import com.smartpatient.auth.dto.RegisterDoctorRequest;
 import com.smartpatient.auth.dto.RegisterPatientRequest;
 import com.smartpatient.auth.dto.UserSummaryDto;
 import com.smartpatient.common.exception.BadRequestException;
 import com.smartpatient.common.exception.ResourceNotFoundException;
 import com.smartpatient.doctor.entity.Doctor;
+import com.smartpatient.doctor.entity.VerificationStatus;
 import com.smartpatient.doctor.repository.DoctorRepository;
+import com.smartpatient.hospital.entity.Hospital;
+import com.smartpatient.hospital.repository.HospitalRepository;
 import com.smartpatient.notification.service.NotificationService;
 import com.smartpatient.patient.entity.Patient;
 import com.smartpatient.patient.repository.PatientRepository;
@@ -38,6 +42,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PatientRepository patientRepository;
     private final DoctorRepository doctorRepository;
+    private final HospitalRepository hospitalRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
@@ -48,6 +53,7 @@ public class AuthService {
     public AuthService(UserRepository userRepository,
                        PatientRepository patientRepository,
                        DoctorRepository doctorRepository,
+                       HospitalRepository hospitalRepository,
                        PasswordEncoder passwordEncoder,
                        AuthenticationManager authenticationManager,
                        JwtTokenProvider tokenProvider,
@@ -56,6 +62,7 @@ public class AuthService {
         this.userRepository = userRepository;
         this.patientRepository = patientRepository;
         this.doctorRepository = doctorRepository;
+        this.hospitalRepository = hospitalRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.tokenProvider = tokenProvider;
@@ -114,7 +121,7 @@ public class AuthService {
 
         auditService.log(savedUser.getUserId(), "REGISTER_PATIENT", "USER", savedUser.getUserId().toString(), "SUCCESS", "Patient ID: " + patientCode);
 
-        // Auto authenticate and generate token directly without redundant DB query or duplicate BCrypt computation
+        // Auto authenticate and generate token
         UserPrincipal principal = UserPrincipal.create(savedUser);
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
@@ -130,6 +137,76 @@ public class AuthService {
                 savedPatient.getFullName(),
                 patientCode,
                 savedPatient.getPatientId()
+        );
+    }
+
+    @Transactional
+    public AuthResponse registerDoctor(RegisterDoctorRequest request) {
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new BadRequestException("Username '" + request.getUsername() + "' is already taken.");
+        }
+
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new BadRequestException("Email '" + request.getEmail() + "' is already registered.");
+        }
+
+        // Create User for Doctor
+        User user = new User(
+                request.getUsername(),
+                request.getEmail(),
+                passwordEncoder.encode(request.getPassword()),
+                UserRole.DOCTOR
+        );
+        user.setAccountStatus(AccountStatus.ACTIVE);
+        User savedUser = userRepository.save(user);
+
+        // Optional hospital affiliation
+        Hospital hospital = null;
+        if (request.getHospitalId() != null) {
+            hospital = hospitalRepository.findById(request.getHospitalId()).orElse(null);
+        }
+
+        // Create Doctor entity with PENDING verification status
+        Doctor doctor = new Doctor(
+                savedUser,
+                hospital,
+                request.getFullName(),
+                request.getSpecialty(),
+                request.getQualification(),
+                request.getLicenseOrRegistrationReference()
+        );
+        doctor.setVerificationStatus(VerificationStatus.PENDING);
+        Doctor savedDoctor = doctorRepository.save(doctor);
+
+        // Create welcome notification explaining verification workflow
+        notificationService.createNotification(
+                savedUser,
+                "SYSTEM",
+                "Medical Registration Received",
+                "Welcome, Dr. " + request.getFullName() + ". Your application with license reference " +
+                        request.getLicenseOrRegistrationReference() + " is pending administrator verification."
+        );
+
+        auditService.log(savedUser.getUserId(), "REGISTER_DOCTOR", "USER", savedUser.getUserId().toString(), "PENDING",
+                "Specialty: " + request.getSpecialty() + ", License: " + request.getLicenseOrRegistrationReference());
+
+        // Authenticate and issue JWT
+        UserPrincipal principal = UserPrincipal.create(savedUser);
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        String jwt = tokenProvider.generateToken(authentication);
+
+        return new AuthResponse(
+                jwt,
+                savedUser.getUserId(),
+                savedUser.getUsername(),
+                savedUser.getEmail(),
+                savedUser.getRole().name(),
+                savedDoctor.getFullName(),
+                null,
+                savedDoctor.getDoctorId(),
+                savedDoctor.getVerificationStatus().name()
         );
     }
 
@@ -159,6 +236,7 @@ public class AuthService {
             String fullName = user.getUsername();
             String patientCode = null;
             Long entityId = null;
+            String verificationStatus = null;
 
             if (user.getRole() == UserRole.PATIENT) {
                 Optional<Patient> pOpt = patientRepository.findByUser_UserId(user.getUserId());
@@ -172,6 +250,7 @@ public class AuthService {
                 if (dOpt.isPresent()) {
                     fullName = dOpt.get().getFullName();
                     entityId = dOpt.get().getDoctorId();
+                    verificationStatus = dOpt.get().getVerificationStatus().name();
                 }
             }
 
@@ -185,7 +264,8 @@ public class AuthService {
                     user.getRole().name(),
                     fullName,
                     patientCode,
-                    entityId
+                    entityId,
+                    verificationStatus
             );
 
         } catch (BadCredentialsException ex) {
@@ -216,6 +296,8 @@ public class AuthService {
             doctorRepository.findByUser_UserId(user.getUserId()).ifPresent(d -> {
                 dto.setFullName(d.getFullName());
                 dto.setEntityId(d.getDoctorId());
+                dto.setVerificationStatus(d.getVerificationStatus().name());
+                dto.setSpecialty(d.getSpecialty());
             });
         } else {
             dto.setFullName("System Administrator");

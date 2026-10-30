@@ -2,6 +2,7 @@ package com.smartpatient.auth.controller;
 
 import com.smartpatient.auth.dto.AuthResponse;
 import com.smartpatient.auth.dto.LoginRequest;
+import com.smartpatient.auth.dto.RegisterDoctorRequest;
 import com.smartpatient.auth.dto.RegisterPatientRequest;
 import com.smartpatient.auth.dto.UserSummaryDto;
 import com.smartpatient.auth.service.AuthService;
@@ -28,6 +29,12 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Registration successful. Your Patient ID is " + response.getPatientCode(), response));
     }
 
+    @PostMapping({"/register-doctor", "/register-doctor/", "/auth/register-doctor", "/auth/register-doctor/"})
+    public ResponseEntity<ApiResponse<AuthResponse>> registerDoctor(@Valid @RequestBody RegisterDoctorRequest request) {
+        AuthResponse response = authService.registerDoctor(request);
+        return ResponseEntity.ok(ApiResponse.success("Doctor application submitted successfully. Your account is pending administrator verification.", response));
+    }
+
     @PostMapping({"/login", "/login/", "/auth/login", "/auth/login/"})
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
@@ -44,8 +51,6 @@ public class AuthController {
     public ResponseEntity<ApiResponse<String>> logout() {
         return ResponseEntity.ok(ApiResponse.success("Logged out successfully.", null));
     }
-
-
 
     @GetMapping({"/me", "/me/", "/auth/me", "/auth/me/"})
     public ResponseEntity<ApiResponse<UserSummaryDto>> getCurrentUser(@AuthenticationPrincipal UserPrincipal principal) {

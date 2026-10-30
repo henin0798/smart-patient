@@ -7,6 +7,7 @@ import java.util.List;
 
 public class ReportComparisonResultDto {
 
+    private Long comparisonId;
     private Long olderReportId;
     private String olderReportTitle;
     private LocalDate olderReportDate;
@@ -15,7 +16,13 @@ public class ReportComparisonResultDto {
     private String newerReportTitle;
     private LocalDate newerReportDate;
 
-    private String disclaimer = "This comparison displays recorded changes and is not a medical diagnosis. Consult a qualified healthcare professional for interpretation.";
+    private String summary;
+    private int increasedCount;
+    private int decreasedCount;
+    private int stableCount;
+    private int outOfRangeCount;
+
+    private String disclaimer = "IMPORTANT MEDICAL DISCLAIMER: This comparison is provided for informational and educational purposes only. It is an automated analysis of the recorded report values and is not a medical diagnosis, clinical assessment, or substitute for professional medical advice. Always consult a qualified physician or healthcare provider for clinical evaluation.";
 
     private List<ComparedTestMetric> matchedMetrics = new ArrayList<>();
     private List<ReportValueDto> olderOnlyMetrics = new ArrayList<>();
@@ -65,6 +72,8 @@ public class ReportComparisonResultDto {
 
     public ReportComparisonResultDto() {}
 
+    public Long getComparisonId() { return comparisonId; }
+    public void setComparisonId(Long comparisonId) { this.comparisonId = comparisonId; }
     public Long getOlderReportId() { return olderReportId; }
     public void setOlderReportId(Long olderReportId) { this.olderReportId = olderReportId; }
     public String getOlderReportTitle() { return olderReportTitle; }
@@ -77,6 +86,16 @@ public class ReportComparisonResultDto {
     public void setNewerReportTitle(String newerReportTitle) { this.newerReportTitle = newerReportTitle; }
     public LocalDate getNewerReportDate() { return newerReportDate; }
     public void setNewerReportDate(LocalDate newerReportDate) { this.newerReportDate = newerReportDate; }
+    public String getSummary() { return summary; }
+    public void setSummary(String summary) { this.summary = summary; }
+    public int getIncreasedCount() { return increasedCount; }
+    public void setIncreasedCount(int increasedCount) { this.increasedCount = increasedCount; }
+    public int getDecreasedCount() { return decreasedCount; }
+    public void setDecreasedCount(int decreasedCount) { this.decreasedCount = decreasedCount; }
+    public int getStableCount() { return stableCount; }
+    public void setStableCount(int stableCount) { this.stableCount = stableCount; }
+    public int getOutOfRangeCount() { return outOfRangeCount; }
+    public void setOutOfRangeCount(int outOfRangeCount) { this.outOfRangeCount = outOfRangeCount; }
     public String getDisclaimer() { return disclaimer; }
     public void setDisclaimer(String disclaimer) { this.disclaimer = disclaimer; }
     public List<ComparedTestMetric> getMatchedMetrics() { return matchedMetrics; }

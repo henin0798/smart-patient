@@ -94,4 +94,28 @@ public class FollowUpService {
         auditService.log(userId, "UPDATE_FOLLOW_UP_STATUS", "FOLLOW_UP", followUpId.toString(), "SUCCESS", "Status: " + status.name());
         return saved;
     }
+
+    @Transactional
+    public FollowUp rescheduleFollowUp(Long followUpId, LocalDate newDate, String note, Long userId) {
+        FollowUp followUp = followUpRepository.findById(followUpId)
+                .orElseThrow(() -> new ResourceNotFoundException("Follow-up not found: " + followUpId));
+
+        LocalDate oldDate = followUp.getFollowUpDate();
+        followUp.setFollowUpDate(newDate);
+        if (note != null && !note.trim().isEmpty()) {
+            followUp.setReason(followUp.getReason() + " (Rescheduled from " + oldDate + ": " + note.trim() + ")");
+        }
+        followUp.setStatus(FollowUpStatus.UPCOMING);
+        FollowUp saved = followUpRepository.save(followUp);
+
+        notificationService.createNotification(
+                followUp.getPatient().getUser(),
+                "FOLLOW_UP",
+                "Follow-up Date Updated",
+                "Your follow-up has been rescheduled to " + newDate + "."
+        );
+
+        auditService.log(userId, "RESCHEDULE_FOLLOW_UP", "FOLLOW_UP", followUpId.toString(), "SUCCESS", "New date: " + newDate);
+        return saved;
+    }
 }

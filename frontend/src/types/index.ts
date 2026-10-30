@@ -1,7 +1,7 @@
 export type UserRole = 'PATIENT' | 'DOCTOR' | 'ADMIN';
 export type AccountStatus = 'ACTIVE' | 'PENDING_VERIFICATION' | 'SUSPENDED' | 'DISABLED';
 export type AppointmentStatus = 'BOOKED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
-export type ReportType = 'LAB' | 'SCAN';
+export type ReportType = 'LAB' | 'SCAN' | 'PRESCRIPTION' | 'CERTIFICATE' | 'OTHER';
 export type FoodInstruction = 'BEFORE_FOOD' | 'AFTER_FOOD' | 'WITH_FOOD' | 'NO_RESTRICTION';
 export type TimePeriod = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'BEDTIME';
 export type DoseStatus = 'PENDING' | 'TAKEN' | 'MISSED';
@@ -24,6 +24,8 @@ export interface UserSummary {
   fullName: string;
   patientCode?: string;
   entityId?: number;
+  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  specialty?: string;
 }
 
 export interface AuthResponse {
@@ -36,6 +38,8 @@ export interface AuthResponse {
   fullName: string;
   patientCode?: string;
   entityId?: number;
+  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  specialty?: string;
 }
 
 export interface Hospital {
@@ -133,16 +137,35 @@ export interface ComparedMetric {
 }
 
 export interface ReportComparisonResult {
+  comparisonId?: number;
   olderReportId: number;
   olderReportTitle: string;
   olderReportDate: string;
   newerReportId: number;
   newerReportTitle: string;
   newerReportDate: string;
+  summary?: string;
+  increasedCount?: number;
+  decreasedCount?: number;
+  stableCount?: number;
+  outOfRangeCount?: number;
   disclaimer: string;
   matchedMetrics: ComparedMetric[];
   olderOnlyMetrics: ReportValue[];
   newerOnlyMetrics: ReportValue[];
+}
+
+export interface SavedReportComparison {
+  comparisonId: number;
+  olderReportId: number;
+  olderReportTitle: string;
+  olderReportDate?: string;
+  newerReportId: number;
+  newerReportTitle: string;
+  newerReportDate?: string;
+  comparisonTitle: string;
+  summary?: string;
+  createdAt: string;
 }
 
 export interface Prescription {
@@ -266,4 +289,3 @@ export interface AuditLog {
   outcome: string;
   metadata?: string;
 }
-

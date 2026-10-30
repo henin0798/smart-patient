@@ -29,6 +29,7 @@ export const NotificationsPage: React.FC = () => {
     mutationFn: (id: number) => apiClient.post(`/api/notifications/${id}/read`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['unread-notifications'] });
       queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
     }
   });
@@ -37,6 +38,7 @@ export const NotificationsPage: React.FC = () => {
     mutationFn: () => apiClient.post('/api/notifications/read-all'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['unread-notifications'] });
       queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
     }
   });

@@ -9,6 +9,8 @@ public class UserSummaryDto {
     private String fullName;
     private String patientCode;
     private Long entityId;
+    private String verificationStatus;
+    private String specialty;
 
     public UserSummaryDto() {}
 
@@ -28,4 +30,8 @@ public class UserSummaryDto {
     public void setPatientCode(String patientCode) { this.patientCode = patientCode; }
     public Long getEntityId() { return entityId; }
     public void setEntityId(Long entityId) { this.entityId = entityId; }
+    public String getVerificationStatus() { return verificationStatus; }
+    public void setVerificationStatus(String verificationStatus) { this.verificationStatus = verificationStatus; }
+    public String getSpecialty() { return specialty; }
+    public void setSpecialty(String specialty) { this.specialty = specialty; }
 }

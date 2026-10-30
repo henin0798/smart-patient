@@ -98,24 +98,28 @@ export const DoctorDashboard: React.FC = () => {
       }, 1800);
     },
     onError: (err: any) => {
-      setRxError(err.message || 'Failed to create prescription.');
+      setRxError(err.message || 'Failed to issue prescription.');
     },
   });
 
   const handleRedeemSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!redeemCode.trim()) return;
-    redeemMutation.mutate(redeemCode.trim());
+    redeemMutation.mutate(redeemCode.trim().toUpperCase());
   };
 
   const handlePrescriptionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeConsultationAppt || !prescriptionMedicine) return;
+    if (!activeConsultationAppt) return;
+    if (!prescriptionMedicine.trim()) {
+      setRxError('Please enter the prescribed medicine name.');
+      return;
+    }
 
     const startDate = new Date().toISOString().split('T')[0];
-    const endDate = new Date(Date.now() + prescriptionDurationDays * 86400000)
-      .toISOString()
-      .split('T')[0];
+    const endDateObj = new Date();
+    endDateObj.setDate(endDateObj.getDate() + prescriptionDurationDays);
+    const endDate = endDateObj.toISOString().split('T')[0];
 
     prescriptionMutation.mutate({
       patientId: activeConsultationAppt.patient.patientId,
@@ -157,10 +161,45 @@ export const DoctorDashboard: React.FC = () => {
           </div>
         </div>
 
-        <Badge variant="success" size="md">
-          Verified Doctor Account
-        </Badge>
+        {doctorProfile?.verificationStatus === 'VERIFIED' ? (
+          <Badge variant="success" size="md">
+            Verified Doctor Account
+          </Badge>
+        ) : doctorProfile?.verificationStatus === 'REJECTED' ? (
+          <Badge variant="error" size="md">
+            Verification Rejected
+          </Badge>
+        ) : (
+          <Badge variant="warning" size="md">
+            Pending Admin Verification
+          </Badge>
+        )}
       </div>
+
+      {/* Verification Notice Banner */}
+      {doctorProfile?.verificationStatus === 'PENDING' && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-bold text-amber-900">Account Application Pending Verification</h3>
+            <p className="text-xs text-amber-800 mt-1">
+              Your doctor registration and medical license reference ({doctorProfile.licenseOrRegistrationReference}) are currently undergoing administrative verification.
+              You may explore your workspace and patient consultation schedules; prescription issuance will become fully active once an administrator approves your license.
+            </p>
+          </div>
+        </div>
+      )}
+      {doctorProfile?.verificationStatus === 'REJECTED' && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-bold text-rose-900">Medical Registration Rejected</h3>
+            <p className="text-xs text-rose-800 mt-1">
+              Your registration reference could not be authenticated against the medical board registry. Please reach out to the hospital administration desk.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Sharing Code Redemption Bar */}
       <Card className="p-4 bg-brand-panel/60 border-brand-border/80">

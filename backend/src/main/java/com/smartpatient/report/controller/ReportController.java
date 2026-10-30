@@ -7,6 +7,7 @@ import com.smartpatient.report.dto.ReportComparisonRequest;
 import com.smartpatient.report.dto.ReportComparisonResultDto;
 import com.smartpatient.report.dto.ReportValueDto;
 import com.smartpatient.report.entity.Report;
+import com.smartpatient.report.entity.ReportComparison;
 import com.smartpatient.report.entity.ReportType;
 import com.smartpatient.report.service.ReportService;
 import com.smartpatient.security.UserPrincipal;
@@ -39,8 +40,14 @@ public class ReportController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<Report>>> getMyReports(
             @AuthenticationPrincipal UserPrincipal principal,
-            @RequestParam(required = false) ReportType type) {
-        List<Report> reports = reportService.getPatientReports(principal.getUserId(), type);
+            @RequestParam(required = false) ReportType type,
+            @RequestParam(required = false) String search) {
+        List<Report> reports;
+        if (search != null && !search.trim().isEmpty()) {
+            reports = reportService.searchPatientReports(principal.getUserId(), type, search);
+        } else {
+            reports = reportService.getPatientReports(principal.getUserId(), type);
+        }
         return ResponseEntity.ok(ApiResponse.success(reports));
     }
 
@@ -61,9 +68,7 @@ public class ReportController {
         if (structuredValuesJson != null && !structuredValuesJson.trim().isEmpty()) {
             try {
                 structuredValues = objectMapper.readValue(structuredValuesJson, new TypeReference<List<ReportValueDto>>() {});
-            } catch (Exception e) {
-                // If parsing fails, proceed without structured values
-            }
+            } catch (Exception ignored) {}
         }
 
         Report report = reportService.uploadReport(
@@ -103,11 +108,42 @@ public class ReportController {
                 .body(file);
     }
 
+    @DeleteMapping("/{reportId}")
+    public ResponseEntity<ApiResponse<String>> deleteReport(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long reportId) {
+        reportService.deleteReport(reportId, principal.getUserId());
+        return ResponseEntity.ok(ApiResponse.success("Medical report deleted successfully.", null));
+    }
+
     @PostMapping("/compare")
     public ResponseEntity<ApiResponse<ReportComparisonResultDto>> compareReports(
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody ReportComparisonRequest request) {
         ReportComparisonResultDto result = reportService.compareReports(principal.getUserId(), request);
         return ResponseEntity.ok(ApiResponse.success("Reports compared successfully", result));
+    }
+
+    @GetMapping("/comparisons")
+    public ResponseEntity<ApiResponse<List<ReportComparison>>> getComparisons(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        List<ReportComparison> list = reportService.getPatientComparisons(principal.getUserId());
+        return ResponseEntity.ok(ApiResponse.success(list));
+    }
+
+    @GetMapping("/comparisons/{comparisonId}")
+    public ResponseEntity<ApiResponse<ReportComparison>> getComparisonById(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long comparisonId) {
+        ReportComparison comp = reportService.getComparisonById(comparisonId, principal.getUserId());
+        return ResponseEntity.ok(ApiResponse.success(comp));
+    }
+
+    @DeleteMapping("/comparisons/{comparisonId}")
+    public ResponseEntity<ApiResponse<String>> deleteComparison(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long comparisonId) {
+        reportService.deleteComparison(comparisonId, principal.getUserId());
+        return ResponseEntity.ok(ApiResponse.success("Comparison removed successfully.", null));
     }
 }

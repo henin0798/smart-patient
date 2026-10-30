@@ -10,6 +10,7 @@ public class AuthResponse {
     private String fullName;
     private String patientCode;
     private Long entityId; // patientId or doctorId
+    private String verificationStatus;
 
     public AuthResponse() {}
 
@@ -23,6 +24,19 @@ public class AuthResponse {
         this.fullName = fullName;
         this.patientCode = patientCode;
         this.entityId = entityId;
+    }
+
+    public AuthResponse(String token, Long userId, String username, String email, String role,
+                        String fullName, String patientCode, Long entityId, String verificationStatus) {
+        this.token = token;
+        this.userId = userId;
+        this.username = username;
+        this.email = email;
+        this.role = role;
+        this.fullName = fullName;
+        this.patientCode = patientCode;
+        this.entityId = entityId;
+        this.verificationStatus = verificationStatus;
     }
 
     public String getToken() {
@@ -95,5 +109,13 @@ public class AuthResponse {
 
     public void setEntityId(Long entityId) {
         this.entityId = entityId;
+    }
+
+    public String getVerificationStatus() {
+        return verificationStatus;
+    }
+
+    public void setVerificationStatus(String verificationStatus) {
+        this.verificationStatus = verificationStatus;
     }
 }

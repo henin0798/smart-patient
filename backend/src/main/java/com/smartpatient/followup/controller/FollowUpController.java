@@ -6,7 +6,6 @@ import com.smartpatient.followup.entity.FollowUpStatus;
 import com.smartpatient.followup.service.FollowUpService;
 import com.smartpatient.security.UserPrincipal;
 import com.smartpatient.user.entity.UserRole;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -59,5 +58,16 @@ public class FollowUpController {
         FollowUpStatus status = FollowUpStatus.valueOf(body.get("status").toUpperCase());
         FollowUp updated = followUpService.updateStatus(followUpId, status, principal.getUserId());
         return ResponseEntity.ok(ApiResponse.success("Follow-up status updated to " + status.name(), updated));
+    }
+
+    @PutMapping("/{followUpId}/reschedule")
+    public ResponseEntity<ApiResponse<FollowUp>> reschedule(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long followUpId,
+            @RequestBody Map<String, String> body) {
+        LocalDate newDate = LocalDate.parse(body.get("followUpDate"));
+        String note = body.get("note");
+        FollowUp updated = followUpService.rescheduleFollowUp(followUpId, newDate, note, principal.getUserId());
+        return ResponseEntity.ok(ApiResponse.success("Follow-up rescheduled successfully", updated));
     }
 }

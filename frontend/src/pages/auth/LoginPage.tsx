@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api-client';
-import { Activity, Eye, EyeOff, Lock, User, AlertCircle, ArrowRight } from 'lucide-react';
+import { Activity, Eye, EyeOff, Lock, User, AlertCircle, ArrowRight, Stethoscope, ShieldCheck } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
@@ -86,7 +86,7 @@ export const LoginPage: React.FC = () => {
           Sign In to Your Health Portal
         </h2>
         <p className="mt-1 text-sm text-brand-muted">
-          Access your digital health record or manage clinical encounters
+          Access your digital health record, doctor encounters, or hospital administration
         </p>
       </div>
 
@@ -99,13 +99,20 @@ export const LoginPage: React.FC = () => {
                 key={r}
                 type="button"
                 onClick={() => setRole(r)}
-                className={`py-2 text-xs font-semibold rounded-lg transition-all ${
+                className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                   role === r
                     ? 'bg-white text-brand-navy shadow-sm'
                     : 'text-brand-muted hover:text-brand-navy'
                 }`}
               >
-                {r.charAt(0) + r.slice(1).toLowerCase()}
+                {r === 'PATIENT' ? (
+                  <User className="w-3.5 h-3.5" />
+                ) : r === 'DOCTOR' ? (
+                  <Stethoscope className="w-3.5 h-3.5" />
+                ) : (
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                )}
+                <span>{r.charAt(0) + r.slice(1).toLowerCase()}</span>
               </button>
             ))}
           </div>
@@ -122,7 +129,13 @@ export const LoginPage: React.FC = () => {
               label="Username or Registered Email"
               type="text"
               required
-              placeholder="e.g. patient1 or deepak@student.edu"
+              placeholder={
+                role === 'PATIENT'
+                  ? 'e.g. patient1 or deepak@student.edu'
+                  : role === 'DOCTOR'
+                  ? 'e.g. dr.sharma or dr.rajesh'
+                  : 'e.g. admin'
+              }
               value={usernameOrEmail}
               onChange={(e) => setUsernameOrEmail(e.target.value)}
             />
@@ -195,11 +208,27 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Contextual Registration Link */}
           <div className="mt-6 text-center text-xs text-brand-muted">
-            Don't have a personal health record?{' '}
-            <Link to="/register" className="font-semibold text-brand-teal hover:underline">
-              Create a Patient ID
-            </Link>
+            {role === 'DOCTOR' ? (
+              <>
+                Medical practitioner looking to join the network?{' '}
+                <Link to="/register?role=DOCTOR" className="font-semibold text-brand-teal hover:underline block sm:inline mt-1 sm:mt-0">
+                  Register Doctor Account
+                </Link>
+              </>
+            ) : role === 'ADMIN' ? (
+              <span className="text-slate-400">
+                Hospital administrative accounts are created and verified internally.
+              </span>
+            ) : (
+              <>
+                Don't have a personal health record?{' '}
+                <Link to="/register?role=PATIENT" className="font-semibold text-brand-teal hover:underline block sm:inline mt-1 sm:mt-0">
+                  Create a Patient ID
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>

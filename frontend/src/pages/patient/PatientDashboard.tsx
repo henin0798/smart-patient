@@ -21,6 +21,7 @@ import { Card, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { PatientDashboardSummary, PatientTimelineEvent } from '../../types';
+import { AppointmentCountdown } from '../../components/common/AppointmentCountdown';
 
 export const PatientDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -78,6 +79,21 @@ export const PatientDashboard: React.FC = () => {
           </Link>
         </div>
       </div>
+
+      {/* Live Countdown Banner for nearest Appointment or Follow-up */}
+      {summary?.upcomingAppointmentDateTime ? (
+        <AppointmentCountdown
+          targetDateTime={summary.upcomingAppointmentDateTime}
+          title="Upcoming Consultation Countdown"
+          subtitle={`With ${summary.upcomingAppointmentDoctor} (${summary.upcomingAppointmentSpecialty}) at ${summary.upcomingAppointmentHospital}`}
+        />
+      ) : summary?.nextFollowUpDate ? (
+        <AppointmentCountdown
+          targetDateTime={summary.nextFollowUpDate}
+          title="Next Scheduled Follow-up Review"
+          subtitle={`With ${summary.nextFollowUpDoctor || 'Physician'}: ${summary.nextFollowUpReason || 'Routine review'}`}
+        />
+      ) : null}
 
       {/* Four Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -138,163 +154,152 @@ export const PatientDashboard: React.FC = () => {
                 to="/reports"
                 className="text-xs font-semibold text-brand-teal hover:underline mt-2 inline-flex items-center gap-1"
               >
-                View & Compare Reports →
+                View Report & Scans →
               </Link>
             </div>
           ) : (
             <div className="mt-2 text-xs text-brand-muted">
-              No medical reports recorded.{' '}
+              No reports uploaded yet.{' '}
               <Link to="/reports" className="text-brand-teal font-semibold hover:underline block mt-1">
-                Upload your first report →
+                Upload lab result →
               </Link>
             </div>
           )}
         </Card>
 
-        {/* Card 3: Today's Medicine Progress */}
+        {/* Card 3: Today's Medication Adherence */}
         <Card hoverEffect className="relative overflow-hidden">
           <div className="flex items-center justify-between mb-3">
-            <div className="p-2.5 rounded-xl bg-emerald-50 text-brand-success border border-emerald-100">
-              <Pill className="w-5 h-5 text-brand-success" />
+            <div className="p-2.5 rounded-xl bg-amber-50 text-brand-warning border border-amber-100">
+              <Pill className="w-5 h-5 text-brand-warning" />
             </div>
-            <Badge variant={summary?.totalDosesToday ? 'success' : 'neutral'}>
-              {summary?.totalDosesToday ? `${summary.takenDosesToday}/${summary.totalDosesToday}` : 'None'}
+            <Badge variant={summary && summary.totalDosesToday > 0 ? 'warning' : 'neutral'}>
+              {summary && summary.totalDosesToday > 0
+                ? `${summary.takenDosesToday}/${summary.totalDosesToday} Taken`
+                : 'No Doses'}
             </Badge>
           </div>
-          <div className="text-xs text-brand-muted font-medium">Today's Medicine Progress</div>
+          <div className="text-xs text-brand-muted font-medium">Today's Dose Adherence</div>
           {summary && summary.totalDosesToday > 0 ? (
             <div className="mt-1">
-              <div className="font-bold text-brand-navy text-xl">
-                {summary.takenDosesToday} of {summary.totalDosesToday} doses
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-bold text-brand-navy">
+                  {Math.round((summary.takenDosesToday / summary.totalDosesToday) * 100)}%
+                </span>
+                <span className="text-xs text-brand-muted">completed</span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-2 mt-2 overflow-hidden">
+              <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden">
                 <div
-                  className="bg-brand-success h-2 rounded-full transition-all duration-300"
+                  className="bg-brand-warning h-1.5 rounded-full transition-all duration-500"
                   style={{
                     width: `${Math.round((summary.takenDosesToday / summary.totalDosesToday) * 100)}%`,
                   }}
                 />
               </div>
-              <Link to="/medicines" className="text-xs font-semibold text-brand-teal hover:underline mt-2 inline-block">
-                Manage Doses Schedule →
+              <Link
+                to="/medicines"
+                className="text-xs font-semibold text-brand-warning hover:underline mt-2 inline-flex items-center gap-1"
+              >
+                Log daily dose →
               </Link>
             </div>
           ) : (
             <div className="mt-2 text-xs text-brand-muted">
-              No doses scheduled for today.{' '}
+              No medication doses scheduled for today.{' '}
               <Link to="/medicines" className="text-brand-teal font-semibold hover:underline block mt-1">
-                View medicine tracker →
+                View full schedule →
               </Link>
             </div>
           )}
         </Card>
 
-        {/* Card 4: Next Follow-up */}
+        {/* Card 4: Next Follow-up Review */}
         <Card hoverEffect className="relative overflow-hidden">
           <div className="flex items-center justify-between mb-3">
-            <div className="p-2.5 rounded-xl bg-amber-50 text-brand-warning border border-amber-100">
-              <Clock className="w-5 h-5 text-brand-warning" />
+            <div className="p-2.5 rounded-xl bg-purple-50 text-purple-700 border border-purple-100">
+              <Clock className="w-5 h-5 text-purple-700" />
             </div>
-            <Badge variant={summary?.nextFollowUpDate ? 'warning' : 'neutral'}>
-              {summary?.nextFollowUpDate ? 'Active' : 'None'}
+            <Badge variant={summary?.nextFollowUpDate ? 'primary' : 'neutral'}>
+              {summary?.nextFollowUpDate ? 'Scheduled' : 'None'}
             </Badge>
           </div>
-          <div className="text-xs text-brand-muted font-medium">Next Recommended Follow-up</div>
+          <div className="text-xs text-brand-muted font-medium">Follow-up Target</div>
           {summary?.nextFollowUpDate ? (
             <div className="mt-1">
-              <div className="font-bold text-brand-navy text-base truncate">
-                {summary.nextFollowUpDoctor}
+              <div className="font-bold text-brand-navy text-base">
+                {summary.nextFollowUpDate}
               </div>
               <div className="text-xs text-brand-muted truncate mt-0.5">
-                {summary.nextFollowUpReason}
+                Doctor: {summary.nextFollowUpDoctor || 'Attending Physician'}
               </div>
-              <div className="text-xs font-semibold text-brand-warning mt-2 flex items-center gap-1">
-                Due by: {summary.nextFollowUpDate}
-              </div>
+              <Link
+                to="/follow-ups"
+                className="text-xs font-semibold text-brand-teal hover:underline mt-2 inline-flex items-center gap-1"
+              >
+                View follow-up details →
+              </Link>
             </div>
           ) : (
             <div className="mt-2 text-xs text-brand-muted">
-              No pending clinical follow-ups.{' '}
+              No pending clinical reviews.{' '}
               <Link to="/follow-ups" className="text-brand-teal font-semibold hover:underline block mt-1">
-                View past follow-ups →
+                Review history →
               </Link>
             </div>
           )}
         </Card>
       </div>
 
-      {/* Quick Actions Panel */}
-      <Card>
-        <CardHeader title="Quick Health Actions" subtitle="Direct shortcuts for patient care and management" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <Link
-            to="/find-care"
-            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-brand-panel hover:bg-slate-200 transition text-center group border border-brand-border/60"
-          >
-            <Building2 className="w-6 h-6 text-brand-navy group-hover:scale-110 transition duration-150 mb-1.5" />
-            <span className="text-xs font-semibold text-brand-navy">Find Care</span>
+      {/* Quick Action Banner */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-brand-navy via-slate-900 to-brand-navy text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+            <Building2 className="w-5 h-5 text-brand-teal" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white">Need to consult a healthcare provider?</h3>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Browse approved hospital departments, doctor profiles, and real-time scheduling slots.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link to="/find-care">
+            <Button variant="secondary" size="sm">
+              Find Hospitals
+            </Button>
           </Link>
-
-          <Link
-            to="/appointments"
-            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-brand-panel hover:bg-slate-200 transition text-center group border border-brand-border/60"
-          >
-            <Calendar className="w-6 h-6 text-brand-navy group-hover:scale-110 transition duration-150 mb-1.5" />
-            <span className="text-xs font-semibold text-brand-navy">Book Visit</span>
-          </Link>
-
-          <Link
-            to="/reports"
-            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-brand-panel hover:bg-slate-200 transition text-center group border border-brand-border/60"
-          >
-            <Upload className="w-6 h-6 text-brand-teal group-hover:scale-110 transition duration-150 mb-1.5" />
-            <span className="text-xs font-semibold text-brand-navy">Upload Report</span>
-          </Link>
-
-          <Link
-            to="/reports"
-            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-brand-panel hover:bg-slate-200 transition text-center group border border-brand-border/60"
-          >
-            <TrendingUp className="w-6 h-6 text-brand-teal group-hover:scale-110 transition duration-150 mb-1.5" />
-            <span className="text-xs font-semibold text-brand-navy">Compare Labs</span>
-          </Link>
-
-          <Link
-            to="/medicines"
-            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-brand-panel hover:bg-slate-200 transition text-center group border border-brand-border/60"
-          >
-            <Pill className="w-6 h-6 text-brand-success group-hover:scale-110 transition duration-150 mb-1.5" />
-            <span className="text-xs font-semibold text-brand-navy">Dose Tracker</span>
-          </Link>
-
-          <Link
-            to="/sharing"
-            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-brand-panel hover:bg-slate-200 transition text-center group border border-brand-border/60"
-          >
-            <Share2 className="w-6 h-6 text-brand-info group-hover:scale-110 transition duration-150 mb-1.5" />
-            <span className="text-xs font-semibold text-brand-navy">Share Access</span>
+          <Link to="/appointments">
+            <Button variant="teal" size="sm" icon={<Calendar className="w-3.5 h-3.5" />}>
+              Book Consultation
+            </Button>
           </Link>
         </div>
-      </Card>
+      </div>
 
-      {/* Patient ID Timeline */}
+      {/* Clinical Timeline */}
       <Card>
         <CardHeader
-          title="Patient ID Timeline"
-          subtitle="Chronological, tamper-evident audit record of your health profile activity"
+          title="Clinical Timeline & Recent Activity"
+          subtitle="Consolidated chronological record of medical consultations, diagnostic uploads, and prescription schedules."
           action={
-            <Badge variant="teal" size="sm">
-              Live Encounters
-            </Badge>
+            <Link to="/reports">
+              <Button variant="outline" size="sm" icon={<TrendingUp className="w-3.5 h-3.5" />}>
+                Detailed Analysis
+              </Button>
+            </Link>
           }
         />
 
         {isTimelineLoading ? (
-          <div className="py-8 text-center text-sm text-brand-muted">Loading timeline records...</div>
+          <div className="py-8 text-center text-xs text-brand-muted">Loading clinical events...</div>
         ) : timeline.length === 0 ? (
-          <div className="py-8 text-center">
+          <div className="py-10 text-center">
             <Activity className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-brand-muted">No timeline activity recorded yet.</p>
+            <p className="text-xs text-brand-muted">No clinical events recorded on this patient record yet.</p>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Events will appear as appointments are attended, prescriptions are issued, and reports are uploaded.
+            </p>
           </div>
         ) : (
           <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-brand-border">

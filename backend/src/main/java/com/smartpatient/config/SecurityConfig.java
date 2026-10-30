@@ -52,7 +52,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Public authentication, discovery, and health check endpoints
                 .requestMatchers("/", "/health", "/api/health").permitAll()
-                .requestMatchers("/api/auth/**", "/api/login", "/api/register").permitAll()
+                .requestMatchers("/api/auth/**", "/api/login", "/api/register", "/api/register-doctor").permitAll()
 
                 .requestMatchers(HttpMethod.GET, "/api/hospitals/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/doctors").permitAll()

@@ -17,4 +17,15 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 
     @Query("SELECT r FROM Report r WHERE r.patient.patientId = :patientId AND r.deletedAt IS NULL ORDER BY r.reportDate DESC")
     List<Report> findLatestReportsForPatient(@Param("patientId") Long patientId);
+
+    @Query("SELECT r FROM Report r WHERE r.patient.patientId = :patientId AND r.deletedAt IS NULL " +
+           "AND (:reportType IS NULL OR r.reportType = :reportType) " +
+           "AND (:search IS NULL OR LOWER(r.reportTitle) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "     OR LOWER(r.originalFilename) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "     OR LOWER(r.description) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "ORDER BY r.reportDate DESC")
+    List<Report> searchReports(
+            @Param("patientId") Long patientId,
+            @Param("reportType") ReportType reportType,
+            @Param("search") String search);
 }
