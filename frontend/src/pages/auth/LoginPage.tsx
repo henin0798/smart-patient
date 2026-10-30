@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/api-client';
 import { Activity, Eye, EyeOff, Lock, User, AlertCircle, ArrowRight } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -16,6 +17,24 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loadingNotice, setLoadingNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Proactively pre-warm backend server while user is filling credentials
+    api.get('/health').catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let timer: any;
+    if (isLoading) {
+      timer = setTimeout(() => {
+        setLoadingNotice('Connecting to cloud server (waking up service, please wait a moment)...');
+      }, 3000);
+    } else {
+      setLoadingNotice(null);
+    }
+    return () => clearTimeout(timer);
+  }, [isLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,6 +154,12 @@ export const LoginPage: React.FC = () => {
             >
               Sign In as {role.charAt(0) + role.slice(1).toLowerCase()}
             </Button>
+
+            {loadingNotice && (
+              <p className="mt-2 text-center text-xs text-brand-teal font-medium animate-pulse">
+                {loadingNotice}
+              </p>
+            )}
           </form>
 
           {/* Demonstration Quick Fill Box */}

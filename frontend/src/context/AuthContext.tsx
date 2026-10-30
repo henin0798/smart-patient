@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { api, getToken, removeToken, setToken } from '../lib/api-client';
-import { AuthResponse, UserRole, UserSummary } from '../types';
+import { AuthResponse, UserSummary } from '../types';
 
 interface AuthContextType {
   user: UserSummary | null;
@@ -16,24 +16,36 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const getCachedUser = (): UserSummary | null => {
+  try {
+    const stored = localStorage.getItem('smart_patient_user');
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserSummary | null>(null);
+  const [user, setUser] = useState<UserSummary | null>(getCachedUser);
   const [token, setTokenState] = useState<string | null>(getToken());
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(!getToken() ? false : !getCachedUser());
 
   const fetchProfile = async () => {
     const existingToken = getToken();
     if (!existingToken) {
       setUser(null);
+      localStorage.removeItem('smart_patient_user');
       setIsLoading(false);
       return;
     }
 
     try {
       const data = await api.get<UserSummary>('/auth/me');
+      localStorage.setItem('smart_patient_user', JSON.stringify(data));
       setUser(data);
     } catch (err) {
       removeToken();
+      localStorage.removeItem('smart_patient_user');
       setTokenState(null);
       setUser(null);
     } finally {
@@ -49,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const res = await api.post<AuthResponse>('/auth/login', { usernameOrEmail, password, role });
     setToken(res.token);
     setTokenState(res.token);
-    setUser({
+    const userSummary: UserSummary = {
       userId: res.userId,
       username: res.username,
       email: res.email,
@@ -58,7 +70,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fullName: res.fullName,
       patientCode: res.patientCode,
       entityId: res.entityId,
-    });
+    };
+    localStorage.setItem('smart_patient_user', JSON.stringify(userSummary));
+    setUser(userSummary);
     return res;
   };
 
@@ -66,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const res = await api.post<AuthResponse>('/auth/register', data);
     setToken(res.token);
     setTokenState(res.token);
-    setUser({
+    const userSummary: UserSummary = {
       userId: res.userId,
       username: res.username,
       email: res.email,
@@ -75,7 +89,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fullName: res.fullName,
       patientCode: res.patientCode,
       entityId: res.entityId,
-    });
+    };
+    localStorage.setItem('smart_patient_user', JSON.stringify(userSummary));
+    setUser(userSummary);
     return res;
   };
 
@@ -86,6 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Ignore network errors on logout
     }
     removeToken();
+    localStorage.removeItem('smart_patient_user');
     setTokenState(null);
     setUser(null);
   };

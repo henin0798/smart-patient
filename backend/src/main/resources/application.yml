@@ -9,10 +9,19 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
   datasource:
-    url: ${SPRING_DATASOURCE_URL:${DB_URL:${DATABASE_URL:jdbc:mysql://localhost:3306/smart_patient_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}}}
+    url: ${SPRING_DATASOURCE_URL:${DB_URL:${DATABASE_URL:jdbc:mysql://localhost:3306/smart_patient_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&useServerPrepStmts=true&autoReconnect=true}}}
     username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:${MYSQLUSER:root}}}
     password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:${MYSQLPASSWORD:}}}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: SmartPatientHikariPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 120000 # 2 minutes
+      max-lifetime: 300000 # 5 minutes (recycles connection before cloud firewalls drop it)
+      connection-timeout: 15000 # 15 seconds
+      keepalive-time: 45000 # 45 seconds (pings MySQL so cloud firewalls never drop idle sockets)
+      connection-test-query: SELECT 1
   jpa:
     hibernate:
       ddl-auto: update

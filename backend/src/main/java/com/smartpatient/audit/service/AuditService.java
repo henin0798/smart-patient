@@ -3,7 +3,6 @@ package com.smartpatient.audit.service;
 import com.smartpatient.audit.entity.AuditLog;
 import com.smartpatient.audit.repository.AuditLogRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -17,7 +16,7 @@ public class AuditService {
         this.auditLogRepository = auditLogRepository;
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void log(Long actorUserId, String actionType, String resourceType, String resourceId, String outcome, String metadata) {
         try {
             AuditLog log = new AuditLog(actorUserId, actionType, resourceType, resourceId, outcome, metadata);

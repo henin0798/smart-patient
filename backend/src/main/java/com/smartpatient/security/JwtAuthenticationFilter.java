@@ -1,5 +1,6 @@
 package com.smartpatient.security;
 
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,8 +34,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String jwt = getJwtFromRequest(request);
 
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
-                Long userId = tokenProvider.getUserIdFromJWT(jwt);
-                UserDetails userDetails = customUserDetailsService.loadUserById(userId);
+                Claims claims = tokenProvider.getClaimsFromJWT(jwt);
+                Long userId = Long.parseLong(claims.getSubject());
+                String username = claims.get("username", String.class);
+                String email = claims.get("email", String.class);
+                String role = claims.get("role", String.class);
+
+                UserDetails userDetails;
+                if (username != null && role != null) {
+                    userDetails = UserPrincipal.createFromJwtClaims(userId, username, email, role);
+                } else {
+                    userDetails = customUserDetailsService.loadUserById(userId);
+                }
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());

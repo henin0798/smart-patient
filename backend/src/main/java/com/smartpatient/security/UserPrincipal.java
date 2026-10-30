@@ -44,6 +44,20 @@ public class UserPrincipal implements UserDetails {
         );
     }
 
+    public static UserPrincipal createFromJwtClaims(Long userId, String username, String email, String role) {
+        UserRole userRole = UserRole.valueOf(role);
+        SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + userRole.name());
+        return new UserPrincipal(
+                userId,
+                username,
+                email,
+                "",
+                userRole,
+                AccountStatus.ACTIVE,
+                Collections.singletonList(authority)
+        );
+    }
+
     public Long getUserId() {
         return userId;
     }
@@ -54,6 +68,10 @@ public class UserPrincipal implements UserDetails {
 
     public UserRole getRole() {
         return role;
+    }
+
+    public AccountStatus getAccountStatus() {
+        return accountStatus;
     }
 
     @Override
@@ -88,6 +106,6 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return accountStatus != AccountStatus.DISABLED;
+        return accountStatus == AccountStatus.ACTIVE;
     }
 }

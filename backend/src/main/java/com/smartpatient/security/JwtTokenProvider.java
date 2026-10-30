@@ -63,13 +63,16 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    public Long getUserIdFromJWT(String token) {
-        Claims claims = Jwts.parser()
+    public Claims getClaimsFromJWT(String token) {
+        return Jwts.parser()
                 .verifyWith(key)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
 
+    public Long getUserIdFromJWT(String token) {
+        Claims claims = getClaimsFromJWT(token);
         return Long.parseLong(claims.getSubject());
     }
 

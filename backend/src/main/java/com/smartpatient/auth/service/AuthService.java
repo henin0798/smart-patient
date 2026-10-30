@@ -114,10 +114,10 @@ public class AuthService {
 
         auditService.log(savedUser.getUserId(), "REGISTER_PATIENT", "USER", savedUser.getUserId().toString(), "SUCCESS", "Patient ID: " + patientCode);
 
-        // Auto authenticate and generate token
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-        );
+        // Auto authenticate and generate token directly without redundant DB query or duplicate BCrypt computation
+        UserPrincipal principal = UserPrincipal.create(savedUser);
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authentication);
         String jwt = tokenProvider.generateToken(authentication);
 
@@ -161,14 +161,14 @@ public class AuthService {
             Long entityId = null;
 
             if (user.getRole() == UserRole.PATIENT) {
-                Optional<Patient> pOpt = patientRepository.findByUser(user);
+                Optional<Patient> pOpt = patientRepository.findByUser_UserId(user.getUserId());
                 if (pOpt.isPresent()) {
                     fullName = pOpt.get().getFullName();
                     patientCode = pOpt.get().getPatientCode();
                     entityId = pOpt.get().getPatientId();
                 }
             } else if (user.getRole() == UserRole.DOCTOR) {
-                Optional<Doctor> dOpt = doctorRepository.findByUser(user);
+                Optional<Doctor> dOpt = doctorRepository.findByUser_UserId(user.getUserId());
                 if (dOpt.isPresent()) {
                     fullName = dOpt.get().getFullName();
                     entityId = dOpt.get().getDoctorId();
@@ -207,13 +207,13 @@ public class AuthService {
         dto.setAccountStatus(user.getAccountStatus().name());
 
         if (user.getRole() == UserRole.PATIENT) {
-            patientRepository.findByUser(user).ifPresent(p -> {
+            patientRepository.findByUser_UserId(user.getUserId()).ifPresent(p -> {
                 dto.setFullName(p.getFullName());
                 dto.setPatientCode(p.getPatientCode());
                 dto.setEntityId(p.getPatientId());
             });
         } else if (user.getRole() == UserRole.DOCTOR) {
-            doctorRepository.findByUser(user).ifPresent(d -> {
+            doctorRepository.findByUser_UserId(user.getUserId()).ifPresent(d -> {
                 dto.setFullName(d.getFullName());
                 dto.setEntityId(d.getDoctorId());
             });
