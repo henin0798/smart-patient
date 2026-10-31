@@ -284,8 +284,9 @@ public class ReportService {
             throw new AccessDeniedException("You can only compare reports belonging to your own medical records.");
         }
 
-        // Ensure chronological order
-        if (older.getReportDate().isAfter(newer.getReportDate())) {
+        // Ensure chronological order (older date first; if dates match, break tie by reportId)
+        if (older.getReportDate().isAfter(newer.getReportDate()) ||
+            (older.getReportDate().isEqual(newer.getReportDate()) && older.getReportId() > newer.getReportId())) {
             Report temp = older;
             older = newer;
             newer = temp;
@@ -298,100 +299,131 @@ public class ReportService {
         result.setNewerReportId(newer.getReportId());
         result.setNewerReportTitle(newer.getReportTitle());
         result.setNewerReportDate(newer.getReportDate());
+        result.setReportType(newer.getReportType() != null ? newer.getReportType().name() : "LAB");
 
         List<ReportValue> olderValues = reportValueRepository.findByReport_ReportId(older.getReportId());
         List<ReportValue> newerValues = reportValueRepository.findByReport_ReportId(newer.getReportId());
 
-        Map<String, ReportValue> newerMap = new HashMap<>();
+        // Index newer values by canonicalized biomarker key
+        Map<String, ReportValue> newerMap = new LinkedHashMap<>();
         for (ReportValue nv : newerValues) {
-            newerMap.put(nv.getNormalizedTestKey(), nv);
+            String cKey = canonicalizeBiomarkerKey(nv.getNormalizedTestKey(), nv.getTestName());
+            newerMap.put(cKey, nv);
         }
 
         Set<String> matchedKeys = new HashSet<>();
 
         for (ReportValue ov : olderValues) {
-            String key = ov.getNormalizedTestKey();
-            if (newerMap.containsKey(key)) {
-                matchedKeys.add(key);
-                ReportValue nv = newerMap.get(key);
+            String ovKey = canonicalizeBiomarkerKey(ov.getNormalizedTestKey(), ov.getTestName());
+            if (newerMap.containsKey(ovKey)) {
+                ReportValue nv = newerMap.get(ovKey);
+                if (areUnitsCompatible(ov.getUnit(), nv.getUnit())) {
+                    matchedKeys.add(ovKey);
 
-                ReportComparisonResultDto.ComparedTestMetric metric = new ReportComparisonResultDto.ComparedTestMetric();
-                metric.setTestName(ov.getTestName());
-                metric.setNormalizedTestKey(key);
-                metric.setUnit(ov.getUnit());
-                metric.setOlderValue(ov.getNumericValue());
-                metric.setNewerValue(nv.getNumericValue());
+                    ReportComparisonResultDto.ComparedTestMetric metric = new ReportComparisonResultDto.ComparedTestMetric();
+                    metric.setTestName(ov.getTestName());
+                    metric.setNormalizedTestKey(ovKey);
+                    String unit = (nv.getUnit() != null && !nv.getUnit().trim().isEmpty()) ? nv.getUnit().trim() : (ov.getUnit() != null ? ov.getUnit().trim() : "");
+                    metric.setUnit(unit);
+                    metric.setOlderValue(ov.getNumericValue());
+                    metric.setNewerValue(nv.getNumericValue());
 
-                BigDecimal diff = nv.getNumericValue().subtract(ov.getNumericValue());
-                metric.setDifference(diff);
+                    BigDecimal diff = nv.getNumericValue().subtract(ov.getNumericValue());
+                    metric.setDifference(diff);
 
-                if (ov.getNumericValue().compareTo(BigDecimal.ZERO) != 0) {
-                    BigDecimal pct = diff.divide(ov.getNumericValue(), 4, RoundingMode.HALF_UP).multiply(new BigDecimal(100)).setScale(2, RoundingMode.HALF_UP);
-                    metric.setPercentageDifference(pct);
+                    if (ov.getNumericValue() != null && ov.getNumericValue().compareTo(BigDecimal.ZERO) != 0) {
+                        BigDecimal pct = diff.divide(ov.getNumericValue(), 4, RoundingMode.HALF_UP)
+                                .multiply(new BigDecimal(100))
+                                .setScale(2, RoundingMode.HALF_UP);
+                        metric.setPercentageDifference(pct);
+                        metric.setPercentageDifferenceString((pct.compareTo(BigDecimal.ZERO) > 0 ? "+" : "") + pct + "%");
+                    } else {
+                        metric.setPercentageDifference(null);
+                        metric.setPercentageDifferenceString("N/A");
+                    }
+
+                    if (diff.compareTo(BigDecimal.ZERO) > 0) {
+                        metric.setTrend("INCREASED");
+                    } else if (diff.compareTo(BigDecimal.ZERO) < 0) {
+                        metric.setTrend("DECREASED");
+                    } else {
+                        metric.setTrend("UNCHANGED");
+                    }
+
+                    metric.setReferenceRangeMin(nv.getReferenceRangeMin() != null ? nv.getReferenceRangeMin() : ov.getReferenceRangeMin());
+                    metric.setReferenceRangeMax(nv.getReferenceRangeMax() != null ? nv.getReferenceRangeMax() : ov.getReferenceRangeMax());
+
+                    String oldStatus = calculateRangeStatus(ov.getNumericValue(), metric.getReferenceRangeMin(), metric.getReferenceRangeMax());
+                    String newStatus = calculateRangeStatus(nv.getNumericValue(), metric.getReferenceRangeMin(), metric.getReferenceRangeMax());
+                    metric.setOlderStatus(oldStatus);
+                    metric.setNewerStatus(newStatus);
+                    metric.setStatusTransition(oldStatus + " → " + newStatus);
+                    metric.setOutOfRange(!"NORMAL".equals(newStatus) && !"UNSPECIFIED".equals(newStatus));
+
+                    result.getMatchedMetrics().add(metric);
+                    continue;
                 }
-
-                if (diff.compareTo(BigDecimal.ZERO) > 0) {
-                    metric.setTrend("INCREASED");
-                } else if (diff.compareTo(BigDecimal.ZERO) < 0) {
-                    metric.setTrend("DECREASED");
-                } else {
-                    metric.setTrend("UNCHANGED");
-                }
-
-                metric.setReferenceRangeMin(nv.getReferenceRangeMin() != null ? nv.getReferenceRangeMin() : ov.getReferenceRangeMin());
-                metric.setReferenceRangeMax(nv.getReferenceRangeMax() != null ? nv.getReferenceRangeMax() : ov.getReferenceRangeMax());
-
-                metric.setOlderStatus(calculateRangeStatus(ov.getNumericValue(), metric.getReferenceRangeMin(), metric.getReferenceRangeMax()));
-                metric.setNewerStatus(calculateRangeStatus(nv.getNumericValue(), metric.getReferenceRangeMin(), metric.getReferenceRangeMax()));
-
-                result.getMatchedMetrics().add(metric);
-            } else {
-                result.getOlderOnlyMetrics().add(toDto(ov));
             }
+            result.getOlderOnlyMetrics().add(toDto(ov));
         }
 
         for (ReportValue nv : newerValues) {
-            if (!matchedKeys.contains(nv.getNormalizedTestKey())) {
+            String nvKey = canonicalizeBiomarkerKey(nv.getNormalizedTestKey(), nv.getTestName());
+            if (!matchedKeys.contains(nvKey)) {
                 result.getNewerOnlyMetrics().add(toDto(nv));
             }
         }
 
-        // Calculate structured analytics counts
-        int inc = 0;
-        int dec = 0;
-        int stbl = 0;
-        int oor = 0;
+        if (result.getMatchedMetrics().isEmpty()) {
+            result.setHasComparableData(false);
+            result.setIncreasedCount(null);
+            result.setDecreasedCount(null);
+            result.setStableCount(null);
+            result.setOutOfRangeCount(null);
+            String noDataMsg = "No comparable structured laboratory values were found in the selected reports. Please check that both reports contain readable laboratory data.";
+            result.setSummary(noDataMsg);
+            result.setDetailedDescription(noDataMsg);
+        } else {
+            result.setHasComparableData(true);
+            int inc = 0;
+            int dec = 0;
+            int stbl = 0;
+            int oor = 0;
 
-        for (ReportComparisonResultDto.ComparedTestMetric m : result.getMatchedMetrics()) {
-            if ("INCREASED".equals(m.getTrend())) inc++;
-            else if ("DECREASED".equals(m.getTrend())) dec++;
-            else stbl++;
+            for (ReportComparisonResultDto.ComparedTestMetric m : result.getMatchedMetrics()) {
+                if ("INCREASED".equals(m.getTrend())) inc++;
+                else if ("DECREASED".equals(m.getTrend())) dec++;
+                else stbl++;
 
-            if ("HIGH".equals(m.getNewerStatus()) || "LOW".equals(m.getNewerStatus())) {
-                oor++;
+                if (m.isOutOfRange()) {
+                    oor++;
+                }
             }
+
+            result.setIncreasedCount(inc);
+            result.setDecreasedCount(dec);
+            result.setStableCount(stbl);
+            result.setOutOfRangeCount(oor);
+
+            String summary = String.format("Longitudinal comparison between %s (%s) and %s (%s). Evaluated %d matching biomarkers: %d increased, %d decreased, %d stable, with %d value(s) outside reference thresholds.",
+                    older.getReportTitle(), older.getReportDate(), newer.getReportTitle(), newer.getReportDate(),
+                    result.getMatchedMetrics().size(), inc, dec, stbl, oor);
+            result.setSummary(summary);
+
+            String detailedDesc = generateDetailedDescription(older, newer, result);
+            result.setDetailedDescription(detailedDesc);
         }
-
-        result.setIncreasedCount(inc);
-        result.setDecreasedCount(dec);
-        result.setStableCount(stbl);
-        result.setOutOfRangeCount(oor);
-
-        String summary = String.format("Longitudinal comparison between %s (%s) and %s (%s). Evaluated %d matching biomarkers: %d increased, %d decreased, %d stable, with %d value(s) outside reference thresholds.",
-                older.getReportTitle(), older.getReportDate(), newer.getReportTitle(), newer.getReportDate(),
-                result.getMatchedMetrics().size(), inc, dec, stbl, oor);
-        result.setSummary(summary);
 
         // Persist to database so comparison history is permanently stored
         try {
             String json = objectMapper.writeValueAsString(result);
             String title = older.getReportTitle() + " vs " + newer.getReportTitle();
             ReportComparison comparison = new ReportComparison(
-                    patient, older, newer, title, summary, json, result.getDisclaimer()
+                    patient, older, newer, title, result.getSummary(), json, result.getDisclaimer()
             );
             ReportComparison saved = reportComparisonRepository.save(comparison);
             result.setComparisonId(saved.getComparisonId());
-        } catch (Exception e) {
+        } catch (Exception ignored) {
             // Keep going even if serialization fails
         }
 
@@ -418,25 +450,158 @@ public class ReportService {
     public ReportComparisonResultDto getComparisonResultById(Long comparisonId, Long userId) {
         ReportComparison comp = getComparisonById(comparisonId, userId);
         try {
-            ReportComparisonResultDto result = objectMapper.readValue(comp.getComparisonDataJson(), ReportComparisonResultDto.class);
-            result.setComparisonId(comp.getComparisonId());
-            if (result.getSummary() == null) {
-                result.setSummary(comp.getSummary());
+            if (comp.getComparisonDataJson() != null && !comp.getComparisonDataJson().trim().isEmpty()) {
+                ReportComparisonResultDto result = objectMapper.readValue(comp.getComparisonDataJson(), ReportComparisonResultDto.class);
+                result.setComparisonId(comp.getComparisonId());
+                if (result.getMatchedMetrics() != null && !result.getMatchedMetrics().isEmpty()) {
+                    if (result.getDetailedDescription() == null) {
+                        result.setDetailedDescription(generateDetailedDescription(comp.getOlderReport(), comp.getNewerReport(), result));
+                    }
+                    return result;
+                }
             }
-            return result;
-        } catch (Exception e) {
-            ReportComparisonResultDto fallback = new ReportComparisonResultDto();
-            fallback.setComparisonId(comp.getComparisonId());
-            fallback.setOlderReportId(comp.getOlderReport().getReportId());
-            fallback.setOlderReportTitle(comp.getOlderReport().getReportTitle());
-            fallback.setOlderReportDate(comp.getOlderReport().getReportDate().toString());
-            fallback.setNewerReportId(comp.getNewerReport().getReportId());
-            fallback.setNewerReportTitle(comp.getNewerReport().getReportTitle());
-            fallback.setNewerReportDate(comp.getNewerReport().getReportDate().toString());
-            fallback.setSummary(comp.getSummary());
-            fallback.setDisclaimer(comp.getDisclaimer());
-            return fallback;
+        } catch (Exception ignored) {}
+
+        // Fallback / dynamic recomputation: guarantees complete table rows and description if reports contain data!
+        ReportComparisonRequest req = new ReportComparisonRequest();
+        req.setOlderReportId(comp.getOlderReport().getReportId());
+        req.setNewerReportId(comp.getNewerReport().getReportId());
+        ReportComparisonResultDto fresh = compareReports(userId, req);
+        fresh.setComparisonId(comp.getComparisonId());
+        return fresh;
+    }
+
+    public static String canonicalizeBiomarkerKey(String rawKey, String testName) {
+        String base = (rawKey != null && !rawKey.trim().isEmpty()) ? rawKey : (testName != null ? testName : "");
+        base = base.toUpperCase().trim();
+        base = base.replaceAll("[^A-Z0-9]+", " ").trim();
+        String[] tokens = base.split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String t : tokens) {
+            if (t.equals("SERUM") || t.equals("BLOOD") || t.equals("PLASMA") ||
+                t.equals("LEVEL") || t.equals("LEVELS") || t.equals("TEST") ||
+                t.equals("PANEL") || t.equals("ASSAY") || t.equals("TOTAL") ||
+                t.equals("ESTIMATED") || t.equals("FASTING") || t.equals("FRACTION")) {
+                continue;
+            }
+            if (sb.length() > 0) sb.append("_");
+            sb.append(t);
         }
+        String cleaned = sb.toString();
+        if (cleaned.isEmpty()) {
+            cleaned = base.replace(" ", "_");
+        }
+
+        if (cleaned.contains("CHOLESTEROL") && !cleaned.contains("HDL") && !cleaned.contains("LDL") && !cleaned.contains("VLDL")) {
+            return "CHOLESTEROL_TOTAL";
+        }
+        if (cleaned.equals("CHOL")) return "CHOLESTEROL_TOTAL";
+        if (cleaned.contains("HDL")) return "HDL_CHOLESTEROL";
+        if (cleaned.contains("LDL")) return "LDL_CHOLESTEROL";
+        if (cleaned.contains("VLDL")) return "VLDL_CHOLESTEROL";
+        if (cleaned.contains("TRIGLYCERIDE") || cleaned.equals("TG") || cleaned.equals("TRIG")) return "TRIGLYCERIDES";
+        if (cleaned.contains("GLUCOSE") || cleaned.contains("SUGAR") || cleaned.equals("FBS")) return "FASTING_GLUCOSE";
+        if (cleaned.contains("HBA1C") || cleaned.contains("A1C") || cleaned.contains("GLYCATED")) return "HBA1C";
+        if (cleaned.equals("HB") || cleaned.equals("HGB") || cleaned.contains("HEMOGLOBIN")) return "HEMOGLOBIN";
+        if (cleaned.equals("WBC") || cleaned.contains("LEUKOCYTE") || cleaned.equals("TLC")) return "WBC";
+        if (cleaned.equals("RBC") || cleaned.contains("ERYTHROCYTE")) return "RBC";
+        if (cleaned.contains("PLATELET") || cleaned.equals("PLT")) return "PLATELETS";
+        if (cleaned.contains("CREATININE")) return "CREATININE";
+        if (cleaned.contains("UREA") || cleaned.equals("BUN")) return "BUN";
+        if (cleaned.contains("URIC")) return "URIC_ACID";
+        if (cleaned.contains("BILIRUBIN") && cleaned.contains("DIRECT")) return "BILIRUBIN_DIRECT";
+        if (cleaned.contains("BILIRUBIN")) return "BILIRUBIN_TOTAL";
+        if (cleaned.equals("SGOT") || cleaned.equals("AST") || cleaned.contains("ASPARTATE")) return "AST";
+        if (cleaned.equals("SGPT") || cleaned.equals("ALT") || cleaned.contains("ALANINE")) return "ALT";
+        if (cleaned.equals("ALP") || cleaned.contains("ALKALINE")) return "ALP";
+        if (cleaned.contains("TSH") || cleaned.contains("THYROTROPIN")) return "TSH";
+        if (cleaned.equals("FT3") || cleaned.contains("FREE_T3")) return "FREE_T3";
+        if (cleaned.equals("FT4") || cleaned.contains("FREE_T4")) return "FREE_T4";
+        if (cleaned.contains("VITAMIN_D") || cleaned.contains("25_OH")) return "VITAMIN_D";
+        if (cleaned.contains("VITAMIN_B12") || cleaned.contains("B12") || cleaned.contains("COBALAMIN")) return "VITAMIN_B12";
+
+        return cleaned;
+    }
+
+    public static boolean areUnitsCompatible(String u1, String u2) {
+        if (u1 == null || u2 == null || u1.trim().isEmpty() || u2.trim().isEmpty()) {
+            return true;
+        }
+        String clean1 = u1.trim().toLowerCase().replaceAll("\\s+", "");
+        String clean2 = u2.trim().toLowerCase().replaceAll("\\s+", "");
+        return clean1.equals(clean2);
+    }
+
+    private String generateDetailedDescription(Report older, Report newer, ReportComparisonResultDto result) {
+        StringBuilder sb = new StringBuilder();
+        int total = result.getMatchedMetrics().size();
+        sb.append(String.format("A total of %d laboratory %s successfully compared between baseline study '%s' (%s) and follow-up study '%s' (%s).\n\n",
+                total, total == 1 ? "parameter was" : "parameters were",
+                older.getReportTitle(), older.getReportDate(),
+                newer.getReportTitle(), newer.getReportDate()));
+
+        List<String> incNames = new ArrayList<>();
+        List<String> decNames = new ArrayList<>();
+        List<String> stableNames = new ArrayList<>();
+        List<String> rangeTransitions = new ArrayList<>();
+        ReportComparisonResultDto.ComparedTestMetric largestDeltaMetric = null;
+        BigDecimal largestDelta = BigDecimal.ZERO;
+
+        for (ReportComparisonResultDto.ComparedTestMetric m : result.getMatchedMetrics()) {
+            String changeStr = String.format("%s: %s %s → %s %s (%s)",
+                    m.getTestName(), m.getOlderValue(), m.getUnit(), m.getNewerValue(), m.getUnit(), m.getPercentageDifferenceString());
+            if ("INCREASED".equals(m.getTrend())) {
+                incNames.add(changeStr);
+            } else if ("DECREASED".equals(m.getTrend())) {
+                decNames.add(changeStr);
+            } else {
+                stableNames.add(String.format("%s: %s %s", m.getTestName(), m.getNewerValue(), m.getUnit()));
+            }
+
+            if (!m.getOlderStatus().equalsIgnoreCase(m.getNewerStatus()) || m.isOutOfRange()) {
+                String rangeText = (m.getReferenceRangeMin() != null && m.getReferenceRangeMax() != null)
+                        ? String.format(" (Ref: %s - %s %s)", m.getReferenceRangeMin(), m.getReferenceRangeMax(), m.getUnit())
+                        : "";
+                rangeTransitions.add(String.format("%s transitioned from %s to %s%s", m.getTestName(), m.getOlderStatus(), m.getNewerStatus(), rangeText));
+            }
+
+            BigDecimal absDiff = m.getDifference().abs();
+            if (absDiff.compareTo(largestDelta) > 0) {
+                largestDelta = absDiff;
+                largestDeltaMetric = m;
+            }
+        }
+
+        sb.append("• Parameter Trends: ");
+        sb.append(String.format("%d increased, %d decreased, and %d remained unchanged. ",
+                incNames.size(), decNames.size(), stableNames.size()));
+        if (!incNames.isEmpty()) {
+            sb.append("\n  - Increased: ").append(String.join("; ", incNames)).append(".");
+        }
+        if (!decNames.isEmpty()) {
+            sb.append("\n  - Decreased: ").append(String.join("; ", decNames)).append(".");
+        }
+        if (!stableNames.isEmpty()) {
+            sb.append("\n  - Unchanged: ").append(String.join("; ", stableNames)).append(".");
+        }
+
+        sb.append("\n\n• Reference Range Status: ");
+        if (!rangeTransitions.isEmpty()) {
+            sb.append(String.join("; ", rangeTransitions)).append(".");
+        } else {
+            sb.append("All compared parameters remained consistently within standard laboratory reference ranges.");
+        }
+
+        if (largestDeltaMetric != null) {
+            sb.append("\n\n• Notable Recorded Shift: The most significant numeric change was observed in ")
+                    .append(largestDeltaMetric.getTestName())
+                    .append(String.format(" with an absolute shift of %s %s (%s).",
+                            largestDeltaMetric.getDifference().abs(), largestDeltaMetric.getUnit(), largestDeltaMetric.getPercentageDifferenceString()));
+        }
+
+        sb.append("\n\nNote: Clinical reference ranges and calibration baselines may vary between laboratories and test methodologies. This longitudinal report provides structured comparative data and is not a clinical assessment or medical diagnosis.");
+
+        return sb.toString();
     }
 
     @Transactional

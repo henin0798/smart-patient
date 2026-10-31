@@ -562,6 +562,24 @@ export const ReportsPage: React.FC = () => {
                     </button>
                     <div className="flex items-center space-x-2">
                       <Button
+                        variant="outline"
+                        size="sm"
+                        icon={<Printer className="w-3.5 h-3.5" />}
+                        onClick={async () => {
+                          try {
+                            const detail = await api.get<ReportComparisonResult>(`/reports/comparisons/${comp.comparisonId}`);
+                            printOrDownloadComparisonPdf(detail, {
+                              patientName: user?.fullName,
+                              patientCode: user?.patientCode,
+                            });
+                          } catch (err: any) {
+                            setPageError(err.message || 'Failed to generate PDF for saved comparison.');
+                          }
+                        }}
+                      >
+                        PDF
+                      </Button>
+                      <Button
                         variant="secondary"
                         size="sm"
                         icon={<Eye className="w-3.5 h-3.5" />}
@@ -1184,220 +1202,305 @@ export const ReportsPage: React.FC = () => {
                 </span>
               </div>
 
-              {/* Structured Metric Summary Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl">
-                  <div className="text-[11px] font-semibold text-sky-800 flex items-center gap-1">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    <span>Increased</span>
-                  </div>
-                  <div className="text-xl font-bold text-sky-900 mt-1">
-                    {comparisonResult.increasedCount ?? comparisonResult.matchedMetrics.filter((m) => m.trend === 'INCREASED').length}
-                  </div>
-                </div>
+              {/* Structured Metric Summary Cards and Comparison Content */}
+              {(() => {
+                const hasData = Boolean(
+                  comparisonResult.hasComparableData !== false &&
+                  comparisonResult.matchedMetrics &&
+                  comparisonResult.matchedMetrics.length > 0
+                );
 
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                  <div className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1">
-                    <TrendingDown className="w-3.5 h-3.5" />
-                    <span>Decreased</span>
-                  </div>
-                  <div className="text-xl font-bold text-emerald-900 mt-1">
-                    {comparisonResult.decreasedCount ?? comparisonResult.matchedMetrics.filter((m) => m.trend === 'DECREASED').length}
-                  </div>
-                </div>
+                const incCount = hasData
+                  ? (comparisonResult.increasedCount ?? comparisonResult.matchedMetrics.filter((m) => m.trend === 'INCREASED').length)
+                  : null;
+                const decCount = hasData
+                  ? (comparisonResult.decreasedCount ?? comparisonResult.matchedMetrics.filter((m) => m.trend === 'DECREASED').length)
+                  : null;
+                const stableCount = hasData
+                  ? (comparisonResult.stableCount ?? comparisonResult.matchedMetrics.filter((m) => m.trend === 'UNCHANGED').length)
+                  : null;
+                const oorCount = hasData
+                  ? (comparisonResult.outOfRangeCount ?? comparisonResult.matchedMetrics.filter((m) => m.newerStatus !== 'NORMAL' && m.newerStatus !== 'UNSPECIFIED').length)
+                  : null;
 
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <div className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
-                    <Minus className="w-3.5 h-3.5" />
-                    <span>Stable / Unchanged</span>
-                  </div>
-                  <div className="text-xl font-bold text-slate-800 mt-1">
-                    {comparisonResult.stableCount ?? comparisonResult.matchedMetrics.filter((m) => m.trend === 'UNCHANGED').length}
-                  </div>
-                </div>
+                return (
+                  <>
+                    {/* Summary Counters */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl">
+                        <div className="text-[11px] font-semibold text-sky-800 flex items-center gap-1">
+                          <TrendingUp className="w-3.5 h-3.5" />
+                          <span>Increased</span>
+                        </div>
+                        <div className="text-xl font-bold text-sky-900 mt-1">
+                          {incCount !== null ? incCount : <span className="text-xs font-semibold text-slate-500">Not available</span>}
+                        </div>
+                      </div>
 
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl">
-                  <div className="text-[11px] font-semibold text-rose-800 flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Out of Range</span>
-                  </div>
-                  <div className="text-xl font-bold text-rose-900 mt-1">
-                    {comparisonResult.outOfRangeCount ?? comparisonResult.matchedMetrics.filter((m) => m.newerStatus !== 'NORMAL').length}
-                  </div>
-                </div>
-              </div>
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                        <div className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1">
+                          <TrendingDown className="w-3.5 h-3.5" />
+                          <span>Decreased</span>
+                        </div>
+                        <div className="text-xl font-bold text-emerald-900 mt-1">
+                          {decCount !== null ? decCount : <span className="text-xs font-semibold text-slate-500">Not available</span>}
+                        </div>
+                      </div>
 
-              {/* Executive Clinical Observation Summary */}
-              {comparisonResult.summary && (
-                <div className="p-3.5 bg-teal-50/80 border border-teal-200 rounded-xl text-xs text-teal-900 leading-relaxed">
-                  <strong className="font-bold text-teal-950">Clinical Summary: </strong>
-                  {comparisonResult.summary}
-                </div>
-              )}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <div className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+                          <Minus className="w-3.5 h-3.5" />
+                          <span>Stable / Unchanged</span>
+                        </div>
+                        <div className="text-xl font-bold text-slate-800 mt-1">
+                          {stableCount !== null ? stableCount : <span className="text-xs font-semibold text-slate-500">Not available</span>}
+                        </div>
+                      </div>
 
-              {/* Visual Comparative Bar Chart */}
-              {chartData.length > 0 && (
-                <div className="p-4 bg-white rounded-xl border border-brand-border space-y-2">
-                  <h4 className="text-xs font-bold text-brand-navy flex items-center gap-1.5">
-                    <Activity className="w-4 h-4 text-brand-teal" />
-                    <span>Biomarker Comparison Chart (Baseline vs Follow-up)</span>
-                  </h4>
-                  <div className="h-64 w-full pt-2">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData} margin={{ top: 10, right: 20, left: -10, bottom: 25 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis
-                          dataKey="name"
-                          angle={-20}
-                          textAnchor="end"
-                          interval={0}
-                          tick={{ fontSize: 10, fill: '#475569' }}
-                        />
-                        <YAxis tick={{ fontSize: 10, fill: '#475569' }} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#0f172a',
-                            borderRadius: '8px',
-                            color: '#ffffff',
-                            fontSize: '11px',
-                            border: 'none',
-                          }}
-                        />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                        <Bar dataKey="Baseline" fill="#94a3b8" radius={[4, 4, 0, 0]} name={`Baseline (${comparisonResult.olderReportDate})`} />
-                        <Bar dataKey="FollowUp" fill="#0d9488" radius={[4, 4, 0, 0]} name={`Follow-up (${comparisonResult.newerReportDate})`} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
+                      <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl">
+                        <div className="text-[11px] font-semibold text-rose-800 flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>Out of Range</span>
+                        </div>
+                        <div className="text-xl font-bold text-rose-900 mt-1">
+                          {oorCount !== null ? oorCount : <span className="text-xs font-semibold text-slate-500">Not available</span>}
+                        </div>
+                      </div>
+                    </div>
 
-              {/* Matched Metrics Detailed Table */}
-              <div className="overflow-x-auto rounded-xl border border-brand-border">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-brand-navy text-white text-[11px] uppercase tracking-wider">
-                    <tr>
-                      <th className="py-3 px-3.5">Test Parameter</th>
-                      <th className="py-3 px-3.5">
-                        Baseline ({comparisonResult.olderReportDate})
-                      </th>
-                      <th className="py-3 px-3.5">
-                        Follow-up ({comparisonResult.newerReportDate})
-                      </th>
-                      <th className="py-3 px-3.5">Difference</th>
-                      <th className="py-3 px-3.5">% Change</th>
-                      <th className="py-3 px-3.5">Trend</th>
-                      <th className="py-3 px-3.5">Ref Range</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-brand-border bg-white">
-                    {comparisonResult.matchedMetrics.map((metric) => {
-                      const isOor = metric.newerStatus !== 'NORMAL';
-                      return (
-                        <tr
-                          key={metric.normalizedTestKey}
-                          className={`hover:bg-slate-50 transition ${isOor ? 'bg-amber-50/40' : ''}`}
-                        >
-                          <td className="py-3 px-3.5 font-semibold text-brand-navy">
-                            {metric.testName}
-                          </td>
-                          <td className="py-3 px-3.5 font-mono">
-                            <span className="font-medium text-slate-700">
-                              {metric.olderValue} {metric.unit}
-                            </span>
-                            <span className="ml-1 text-[10px] text-brand-muted">
-                              ({metric.olderStatus})
-                            </span>
-                          </td>
-                          <td className="py-3 px-3.5 font-mono">
-                            <span className={`font-bold ${isOor ? 'text-amber-800' : 'text-brand-navy'}`}>
-                              {metric.newerValue} {metric.unit}
-                            </span>
-                            <span className={`ml-1 text-[10px] ${isOor ? 'text-amber-700 font-bold' : 'text-brand-muted'}`}>
-                              ({metric.newerStatus})
-                            </span>
-                          </td>
-                          <td className="py-3 px-3.5 font-mono font-semibold">
-                            <span
-                              className={
-                                metric.difference < 0
-                                  ? 'text-emerald-600'
-                                  : metric.difference > 0
-                                  ? 'text-sky-600'
-                                  : 'text-slate-600'
-                              }
-                            >
-                              {metric.difference > 0 ? `+${metric.difference}` : metric.difference} {metric.unit}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3.5 font-mono font-bold">
-                            {metric.percentageDifference !== undefined ? (
-                              <span
-                                className={`px-2 py-0.5 rounded text-[11px] ${
-                                  metric.percentageDifference < 0
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : 'bg-sky-100 text-sky-800'
-                                }`}
-                              >
-                                {metric.percentageDifference > 0
-                                  ? `+${metric.percentageDifference}%`
-                                  : `${metric.percentageDifference}%`}
+                    {/* Notice if no comparable structured laboratory values */}
+                    {!hasData && (
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2.5">
+                        <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold text-amber-950 text-sm">No Comparable Structured Values</div>
+                          <p className="mt-1 leading-relaxed text-amber-800">
+                            No comparable structured laboratory values were found in the selected reports. Please check that both reports contain readable laboratory data.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Written Comparison Description */}
+                    {(comparisonResult.detailedDescription || comparisonResult.summary) && (
+                      <div className="p-4 bg-teal-50/80 border border-teal-200 rounded-xl space-y-2">
+                        <div className="text-xs font-bold text-teal-950 uppercase tracking-wide flex items-center gap-1.5">
+                          <FileText className="w-4 h-4 text-teal-700" />
+                          <span>Written Longitudinal Comparison Description</span>
+                        </div>
+                        <p className="text-xs text-teal-900 leading-relaxed whitespace-pre-line font-medium">
+                          {comparisonResult.detailedDescription || comparisonResult.summary}
+                        </p>
+                        <p className="text-[11px] text-teal-700/80 italic pt-1 border-t border-teal-200/60">
+                          Note: Reference ranges and test methodologies may vary between laboratories.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Visual Comparative Bar Chart (Only when data exists) */}
+                    {hasData && chartData.length > 0 && (
+                      <div className="p-4 bg-white rounded-xl border border-brand-border space-y-2">
+                        <h4 className="text-xs font-bold text-brand-navy flex items-center gap-1.5">
+                          <Activity className="w-4 h-4 text-brand-teal" />
+                          <span>Biomarker Comparison Chart (Baseline vs Follow-up)</span>
+                        </h4>
+                        <div className="h-64 w-full pt-2">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartData} margin={{ top: 10, right: 20, left: -10, bottom: 25 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                              <XAxis
+                                dataKey="name"
+                                angle={-20}
+                                textAnchor="end"
+                                interval={0}
+                                tick={{ fontSize: 10, fill: '#475569' }}
+                              />
+                              <YAxis tick={{ fontSize: 10, fill: '#475569' }} />
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: '#0f172a',
+                                  borderRadius: '8px',
+                                  color: '#ffffff',
+                                  fontSize: '11px',
+                                  border: 'none',
+                                }}
+                              />
+                              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                              <Bar dataKey="Baseline" fill="#94a3b8" radius={[4, 4, 0, 0]} name={`Baseline (${comparisonResult.olderReportDate})`} />
+                              <Bar dataKey="FollowUp" fill="#0d9488" radius={[4, 4, 0, 0]} name={`Follow-up (${comparisonResult.newerReportDate})`} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Matched Metrics 8-Column Detailed Table (Only when data exists) */}
+                    {hasData && (
+                      <div className="overflow-x-auto rounded-xl border border-brand-border">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-brand-navy text-white text-[11px] uppercase tracking-wider">
+                            <tr>
+                              <th className="py-3 px-3.5">Laboratory Parameter</th>
+                              <th className="py-3 px-3.5">
+                                Baseline ({comparisonResult.olderReportDate})
+                              </th>
+                              <th className="py-3 px-3.5">
+                                Follow-up ({comparisonResult.newerReportDate})
+                              </th>
+                              <th className="py-3 px-3.5">Difference</th>
+                              <th className="py-3 px-3.5">% Change</th>
+                              <th className="py-3 px-3.5">Trend</th>
+                              <th className="py-3 px-3.5">Ref Range</th>
+                              <th className="py-3 px-3.5">Status / Interpretation</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-brand-border bg-white">
+                            {comparisonResult.matchedMetrics.map((metric) => {
+                              const isOor = metric.newerStatus !== 'NORMAL' && metric.newerStatus !== 'UNSPECIFIED';
+                              return (
+                                <tr
+                                  key={metric.normalizedTestKey}
+                                  className={`hover:bg-slate-50 transition ${isOor ? 'bg-amber-50/40' : ''}`}
+                                >
+                                  <td className="py-3 px-3.5 font-semibold text-brand-navy">
+                                    {metric.testName}
+                                  </td>
+                                  <td className="py-3 px-3.5 font-mono">
+                                    <span className="font-medium text-slate-700">
+                                      {metric.olderValue} {metric.unit}
+                                    </span>
+                                    <span className="ml-1 text-[10px] text-brand-muted block">
+                                      ({metric.olderStatus})
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3.5 font-mono">
+                                    <span className={`font-bold ${isOor ? 'text-amber-800' : 'text-brand-navy'}`}>
+                                      {metric.newerValue} {metric.unit}
+                                    </span>
+                                    <span className={`ml-1 text-[10px] block ${isOor ? 'text-amber-700 font-bold' : 'text-brand-muted'}`}>
+                                      ({metric.newerStatus})
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3.5 font-mono font-semibold">
+                                    <span
+                                      className={
+                                        metric.difference < 0
+                                          ? 'text-emerald-600'
+                                          : metric.difference > 0
+                                          ? 'text-sky-600'
+                                          : 'text-slate-600'
+                                      }
+                                    >
+                                      {metric.difference > 0 ? `+${metric.difference}` : metric.difference} {metric.unit}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3.5 font-mono font-bold">
+                                    {metric.percentageDifferenceString ? (
+                                      <span
+                                        className={`px-2 py-0.5 rounded text-[11px] ${
+                                          metric.percentageDifferenceString.startsWith('-')
+                                            ? 'bg-emerald-100 text-emerald-800'
+                                            : metric.percentageDifferenceString.startsWith('+')
+                                            ? 'bg-sky-100 text-sky-800'
+                                            : 'bg-slate-100 text-slate-700'
+                                        }`}
+                                      >
+                                        {metric.percentageDifferenceString}
+                                      </span>
+                                    ) : metric.percentageDifference !== undefined && metric.percentageDifference !== null ? (
+                                      <span
+                                        className={`px-2 py-0.5 rounded text-[11px] ${
+                                          metric.percentageDifference < 0
+                                            ? 'bg-emerald-100 text-emerald-800'
+                                            : 'bg-sky-100 text-sky-800'
+                                        }`}
+                                      >
+                                        {metric.percentageDifference > 0
+                                          ? `+${metric.percentageDifference}%`
+                                          : `${metric.percentageDifference}%`}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400 font-normal">N/A</span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-3.5">
+                                    <Badge
+                                      variant={
+                                        metric.trend === 'DECREASED'
+                                          ? 'success'
+                                          : metric.trend === 'INCREASED'
+                                          ? 'info'
+                                          : 'neutral'
+                                      }
+                                      size="sm"
+                                    >
+                                      {metric.trend}
+                                    </Badge>
+                                  </td>
+                                  <td className="py-3 px-3.5 text-brand-muted font-mono text-[11px]">
+                                    {metric.referenceRangeMin !== undefined && metric.referenceRangeMin !== null && metric.referenceRangeMax !== undefined && metric.referenceRangeMax !== null
+                                      ? `${metric.referenceRangeMin} - ${metric.referenceRangeMax} ${metric.unit || ''}`
+                                      : 'N/A'}
+                                  </td>
+                                  <td className="py-3 px-3.5">
+                                    <span
+                                      className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                        isOor
+                                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                          : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                      }`}
+                                    >
+                                      {metric.statusTransition || `${metric.olderStatus} → ${metric.newerStatus}`}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Dedicated Section: Parameters Present in Only One Report */}
+                    {((comparisonResult.olderOnlyMetrics && comparisonResult.olderOnlyMetrics.length > 0) ||
+                      (comparisonResult.newerOnlyMetrics && comparisonResult.newerOnlyMetrics.length > 0)) && (
+                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                        <div className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                          <AlertCircle className="w-4 h-4 text-slate-500" />
+                          <span>Parameters Present in Only One Report</span>
+                        </div>
+                        <p className="text-xs text-slate-600">
+                          The following laboratory parameters were recorded in only one of the selected studies and cannot be evaluated longitudinally:
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          {comparisonResult.olderOnlyMetrics && comparisonResult.olderOnlyMetrics.map((m) => (
+                            <div key={`older-${m.valueId || m.testName}`} className="p-2.5 bg-white border border-slate-200 rounded-lg flex justify-between items-center">
+                              <div>
+                                <span className="font-semibold text-slate-800">{m.testName}</span>
+                                <span className="ml-1 text-[11px] text-slate-500">({m.numericValue} {m.unit})</span>
+                              </div>
+                              <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">
+                                Baseline only
                               </span>
-                            ) : (
-                              'N/A'
-                            )}
-                          </td>
-                          <td className="py-3 px-3.5">
-                            <Badge
-                              variant={
-                                metric.trend === 'DECREASED'
-                                  ? 'success'
-                                  : metric.trend === 'INCREASED'
-                                  ? 'info'
-                                  : 'neutral'
-                              }
-                              size="sm"
-                            >
-                              {metric.trend}
-                            </Badge>
-                          </td>
-                          <td className="py-3 px-3.5 text-brand-muted font-mono text-[11px]">
-                            {metric.referenceRangeMin !== undefined && metric.referenceRangeMax !== undefined
-                              ? `${metric.referenceRangeMin} - ${metric.referenceRangeMax}`
-                              : 'N/A'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Unmatched Metrics Notice (if any) */}
-              {(comparisonResult.olderOnlyMetrics.length > 0 || comparisonResult.newerOnlyMetrics.length > 0) && (
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 text-slate-600">
-                  <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Non-overlapping parameters noted</span>
-                  </div>
-                  {comparisonResult.olderOnlyMetrics.length > 0 && (
-                    <div>
-                      Tested in Baseline only:{' '}
-                      <span className="font-medium text-slate-700">
-                        {comparisonResult.olderOnlyMetrics.map((m) => m.testName).join(', ')}
-                      </span>
-                    </div>
-                  )}
-                  {comparisonResult.newerOnlyMetrics.length > 0 && (
-                    <div>
-                      Tested in Follow-up only:{' '}
-                      <span className="font-medium text-slate-700">
-                        {comparisonResult.newerOnlyMetrics.map((m) => m.testName).join(', ')}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
+                            </div>
+                          ))}
+                          {comparisonResult.newerOnlyMetrics && comparisonResult.newerOnlyMetrics.map((m) => (
+                            <div key={`newer-${m.valueId || m.testName}`} className="p-2.5 bg-white border border-slate-200 rounded-lg flex justify-between items-center">
+                              <div>
+                                <span className="font-semibold text-slate-800">{m.testName}</span>
+                                <span className="ml-1 text-[11px] text-slate-500">({m.numericValue} {m.unit})</span>
+                              </div>
+                              <span className="text-[10px] bg-teal-100 text-teal-800 px-2 py-0.5 rounded font-medium">
+                                Follow-up only
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>

@@ -128,12 +128,15 @@ export interface ComparedMetric {
   olderValue: number;
   newerValue: number;
   difference: number;
-  percentageDifference?: number;
+  percentageDifference?: number | null;
+  percentageDifferenceString?: string;
   trend: 'INCREASED' | 'DECREASED' | 'UNCHANGED';
-  referenceRangeMin?: number;
-  referenceRangeMax?: number;
+  referenceRangeMin?: number | null;
+  referenceRangeMax?: number | null;
   olderStatus: string;
   newerStatus: string;
+  statusTransition?: string;
+  isOutOfRange?: boolean;
 }
 
 export interface ReportComparisonResult {
@@ -144,11 +147,14 @@ export interface ReportComparisonResult {
   newerReportId: number;
   newerReportTitle: string;
   newerReportDate: string;
+  reportType?: string;
   summary?: string;
-  increasedCount?: number;
-  decreasedCount?: number;
-  stableCount?: number;
-  outOfRangeCount?: number;
+  detailedDescription?: string;
+  hasComparableData?: boolean;
+  increasedCount?: number | null;
+  decreasedCount?: number | null;
+  stableCount?: number | null;
+  outOfRangeCount?: number | null;
   disclaimer: string;
   matchedMetrics: ComparedMetric[];
   olderOnlyMetrics: ReportValue[];
