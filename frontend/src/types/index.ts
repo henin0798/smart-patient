@@ -150,6 +150,7 @@ export interface ReportComparisonResult {
   reportType?: string;
   summary?: string;
   detailedDescription?: string;
+  unmatchedReason?: string;
   hasComparableData?: boolean;
   increasedCount?: number | null;
   decreasedCount?: number | null;

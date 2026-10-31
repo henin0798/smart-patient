@@ -28,6 +28,7 @@ public class ReportComparisonResultDto {
     private String reportType = "LAB";
     private String summary;
     private String detailedDescription;
+    private String unmatchedReason;
     private boolean hasComparableData = true;
 
     private Integer increasedCount;
@@ -150,6 +151,9 @@ public class ReportComparisonResultDto {
 
     public String getDetailedDescription() { return detailedDescription; }
     public void setDetailedDescription(String detailedDescription) { this.detailedDescription = detailedDescription; }
+
+    public String getUnmatchedReason() { return unmatchedReason; }
+    public void setUnmatchedReason(String unmatchedReason) { this.unmatchedReason = unmatchedReason; }
 
     public boolean isHasComparableData() { return hasComparableData; }
     public boolean getHasComparableData() { return hasComparableData; }

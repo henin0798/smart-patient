@@ -1247,6 +1247,25 @@ export const ReportsPage: React.FC = () => {
               ))}
             </Select>
 
+            {/* Swap Button & Help */}
+            <div className="sm:col-span-2 flex items-center justify-between py-1 border-t border-brand-border/40 pt-2">
+              <span className="text-[11px] text-brand-muted">
+                Defaults to chronological test dates. Use swap to invert baseline and follow-up.
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const temp = olderReportId;
+                  setOlderReportId(newerReportId);
+                  setNewerReportId(temp);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-brand-border rounded-lg text-xs font-semibold text-brand-teal hover:bg-teal-50 transition shadow-sm"
+              >
+                <ArrowUpDown className="w-3.5 h-3.5" />
+                <span>Swap Baseline & Follow-up</span>
+              </button>
+            </div>
+
             {compareError && (
               <div className="sm:col-span-2 p-3 rounded-lg bg-rose-50 border border-rose-200 text-brand-error text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -1387,9 +1406,16 @@ export const ReportsPage: React.FC = () => {
                       <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2.5">
                         <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                         <div>
-                          <div className="font-bold text-amber-950 text-sm">No Comparable Structured Values</div>
+                          <div className="font-bold text-amber-950 text-sm">
+                            {comparisonResult.unmatchedReason === 'DIFFERENT_TESTS'
+                              ? 'Different Clinical Panels Recorded'
+                              : comparisonResult.unmatchedReason === 'INCOMPATIBLE_UNITS'
+                              ? 'Incompatible Measurement Units'
+                              : 'No Comparable Structured Lab Values'}
+                          </div>
                           <p className="mt-1 leading-relaxed text-amber-800">
-                            No comparable structured laboratory values were found in the selected reports. Please check that both reports contain readable laboratory data.
+                            {comparisonResult.summary ||
+                              'No comparable structured laboratory values were found in the selected reports. Please check that both reports contain readable laboratory data.'}
                           </p>
                         </div>
                       </div>

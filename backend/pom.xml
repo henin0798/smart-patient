@@ -65,6 +65,13 @@
             
         </dependency>
 
+        <!-- Apache PDFBox for automated text and lab value extraction from digital PDF medical reports -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.3</version>
+        </dependency>
+
         <!-- JWT for stateless, secure, robust token authentication -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
