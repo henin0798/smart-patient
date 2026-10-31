@@ -696,9 +696,6 @@ public class ReportService {
         return sb.toString();
     }
 
-        return sb.toString();
-    }
-
     @Transactional
     public void deleteComparison(Long comparisonId, Long userId) {
         ReportComparison comp = getComparisonById(comparisonId, userId);
