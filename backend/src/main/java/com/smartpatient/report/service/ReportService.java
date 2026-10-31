@@ -43,6 +43,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -129,8 +132,8 @@ public class ReportService {
         // Validate file extension and MIME type
         String originalFilename = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()));
         String lowerName = originalFilename.toLowerCase();
-        if (!lowerName.endsWith(".pdf") && !lowerName.endsWith(".png") && !lowerName.endsWith(".jpg") && !lowerName.endsWith(".jpeg")) {
-            throw new BadRequestException("Invalid file format. Allowed formats: PDF, PNG, JPEG.");
+        if (!lowerName.endsWith(".pdf") && !lowerName.endsWith(".png") && !lowerName.endsWith(".jpg") && !lowerName.endsWith(".jpeg") && !lowerName.endsWith(".txt")) {
+            throw new BadRequestException("Invalid file format. Allowed formats: PDF, PNG, JPEG, TXT.");
         }
 
         // Max 15MB
@@ -165,7 +168,16 @@ public class ReportService {
 
         Report savedReport = reportRepository.save(report);
 
-        // Save structured test values if supplied
+        // Auto-extract structured test values from file if none supplied
+        if (structuredValues == null || structuredValues.isEmpty()) {
+            try {
+                byte[] bytes = Files.readAllBytes(targetPath);
+                String textContent = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
+                structuredValues = extractValuesFromText(textContent);
+            } catch (Exception ignored) {}
+        }
+
+        // Save structured test values if supplied or extracted
         if (structuredValues != null && !structuredValues.isEmpty()) {
             for (ReportValueDto dto : structuredValues) {
                 if (dto.getTestName() != null && !dto.getTestName().trim().isEmpty() && dto.getNumericValue() != null) {
@@ -304,6 +316,13 @@ public class ReportService {
         List<ReportValue> olderValues = reportValueRepository.findByReport_ReportId(older.getReportId());
         List<ReportValue> newerValues = reportValueRepository.findByReport_ReportId(newer.getReportId());
 
+        if (olderValues.isEmpty()) {
+            olderValues = tryExtractAndSaveValues(older, patient.getUser());
+        }
+        if (newerValues.isEmpty()) {
+            newerValues = tryExtractAndSaveValues(newer, patient.getUser());
+        }
+
         // Index newer values by canonicalized biomarker key
         Map<String, ReportValue> newerMap = new LinkedHashMap<>();
         for (ReportValue nv : newerValues) {
@@ -325,11 +344,11 @@ public class ReportService {
                     metric.setNormalizedTestKey(ovKey);
                     String unit = (nv.getUnit() != null && !nv.getUnit().trim().isEmpty()) ? nv.getUnit().trim() : (ov.getUnit() != null ? ov.getUnit().trim() : "");
                     metric.setUnit(unit);
-                    metric.setOlderValue(ov.getNumericValue());
-                    metric.setNewerValue(nv.getNumericValue());
+                    metric.setOlderValue(stripZeros(ov.getNumericValue()));
+                    metric.setNewerValue(stripZeros(nv.getNumericValue()));
 
                     BigDecimal diff = nv.getNumericValue().subtract(ov.getNumericValue());
-                    metric.setDifference(diff);
+                    metric.setDifference(stripZeros(diff));
 
                     if (ov.getNumericValue() != null && ov.getNumericValue().compareTo(BigDecimal.ZERO) != 0) {
                         BigDecimal pct = diff.divide(ov.getNumericValue(), 4, RoundingMode.HALF_UP)
@@ -350,8 +369,8 @@ public class ReportService {
                         metric.setTrend("UNCHANGED");
                     }
 
-                    metric.setReferenceRangeMin(nv.getReferenceRangeMin() != null ? nv.getReferenceRangeMin() : ov.getReferenceRangeMin());
-                    metric.setReferenceRangeMax(nv.getReferenceRangeMax() != null ? nv.getReferenceRangeMax() : ov.getReferenceRangeMax());
+                    metric.setReferenceRangeMin(stripZeros(nv.getReferenceRangeMin() != null ? nv.getReferenceRangeMin() : ov.getReferenceRangeMin()));
+                    metric.setReferenceRangeMax(stripZeros(nv.getReferenceRangeMax() != null ? nv.getReferenceRangeMax() : ov.getReferenceRangeMax()));
 
                     String oldStatus = calculateRangeStatus(ov.getNumericValue(), metric.getReferenceRangeMin(), metric.getReferenceRangeMax());
                     String newStatus = calculateRangeStatus(nv.getNumericValue(), metric.getReferenceRangeMin(), metric.getReferenceRangeMax());
@@ -380,7 +399,11 @@ public class ReportService {
             result.setDecreasedCount(null);
             result.setStableCount(null);
             result.setOutOfRangeCount(null);
-            String noDataMsg = "No comparable structured laboratory values were found in the selected reports. Please check that both reports contain readable laboratory data.";
+            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH);
+            String olderDateStr = older.getReportDate() != null ? older.getReportDate().format(dtf) : "Baseline";
+            String newerDateStr = newer.getReportDate() != null ? newer.getReportDate().format(dtf) : "Follow-up";
+            String noDataMsg = String.format("No matching laboratory test parameters could be compared between '%s' (%s) and '%s' (%s).\n\nWhy this happens:\n• One or both documents might be diagnostic imaging (such as an X-ray, MRI, or Ultrasound), a prescription, or a non-laboratory document.\n• The two reports measure different test panels (for example, comparing a Lipid Profile with a Liver Function Test).\n• No readable numeric laboratory test values were provided or extracted during upload.\n\nTo view a comparison, please ensure both selected documents are laboratory blood tests containing matching test parameters (such as Hemoglobin, Blood Sugar, or Lipid Profile).\n\nNote: This tool tracks recorded values only. It does not predict future clinical trajectory, claim a result will become normal, or provide a medical diagnosis.",
+                    older.getReportTitle(), olderDateStr, newer.getReportTitle(), newerDateStr);
             result.setSummary(noDataMsg);
             result.setDetailedDescription(noDataMsg);
         } else {
@@ -532,74 +555,90 @@ public class ReportService {
         return clean1.equals(clean2);
     }
 
+
+    private BigDecimal stripZeros(BigDecimal val) {
+        if (val == null) return null;
+        return val.stripTrailingZeros();
+    }
+
+    private String formatNum(BigDecimal val) {
+        if (val == null) return "";
+        return val.stripTrailingZeros().toPlainString();
+    }
+
     private String generateDetailedDescription(Report older, Report newer, ReportComparisonResultDto result) {
         StringBuilder sb = new StringBuilder();
         int total = result.getMatchedMetrics().size();
-        sb.append(String.format("A total of %d laboratory %s successfully compared between baseline study '%s' (%s) and follow-up study '%s' (%s).\n\n",
-                total, total == 1 ? "parameter was" : "parameters were",
-                older.getReportTitle(), older.getReportDate(),
-                newer.getReportTitle(), newer.getReportDate()));
 
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH);
+        String formattedOlderDate = older.getReportDate() != null ? older.getReportDate().format(dtf) : "Baseline Date";
+        String formattedNewerDate = newer.getReportDate() != null ? newer.getReportDate().format(dtf) : "Follow-up Date";
+
+        sb.append(String.format("Longitudinal comparison between your baseline report '%s' (%s) and follow-up report '%s' (%s). A total of %d matching laboratory %s evaluated:\n\n",
+                older.getReportTitle(), formattedOlderDate,
+                newer.getReportTitle(), formattedNewerDate,
+                total, total == 1 ? "parameter was" : "parameters were"));
+
+        List<String> plainSentences = new ArrayList<>();
         List<String> incNames = new ArrayList<>();
         List<String> decNames = new ArrayList<>();
         List<String> stableNames = new ArrayList<>();
-        List<String> rangeTransitions = new ArrayList<>();
-        ReportComparisonResultDto.ComparedTestMetric largestDeltaMetric = null;
-        BigDecimal largestDelta = BigDecimal.ZERO;
 
         for (ReportComparisonResultDto.ComparedTestMetric m : result.getMatchedMetrics()) {
-            String changeStr = String.format("%s: %s %s → %s %s (%s)",
-                    m.getTestName(), m.getOlderValue(), m.getUnit(), m.getNewerValue(), m.getUnit(), m.getPercentageDifferenceString());
-            if ("INCREASED".equals(m.getTrend())) {
-                incNames.add(changeStr);
-            } else if ("DECREASED".equals(m.getTrend())) {
-                decNames.add(changeStr);
+            String unitStr = (m.getUnit() != null && !m.getUnit().trim().isEmpty()) ? " " + m.getUnit().trim() : "";
+            BigDecimal diff = m.getDifference();
+            BigDecimal absDiff = diff != null ? diff.abs() : BigDecimal.ZERO;
+
+            String trendClause;
+            String pctStr = (m.getPercentageDifferenceString() != null && !"N/A".equals(m.getPercentageDifferenceString()))
+                    ? " (" + m.getPercentageDifferenceString() + ")"
+                    : "";
+            if (diff != null && diff.compareTo(BigDecimal.ZERO) > 0) {
+                trendClause = "That is an increase of " + formatNum(absDiff) + unitStr + pctStr + ".";
+                incNames.add(m.getTestName());
+            } else if (diff != null && diff.compareTo(BigDecimal.ZERO) < 0) {
+                trendClause = "That is a decrease of " + formatNum(absDiff) + unitStr + pctStr + ".";
+                decNames.add(m.getTestName());
             } else {
-                stableNames.add(String.format("%s: %s %s", m.getTestName(), m.getNewerValue(), m.getUnit()));
+                trendClause = "The result remained unchanged between the two visits.";
+                stableNames.add(m.getTestName());
             }
 
-            if (!m.getOlderStatus().equalsIgnoreCase(m.getNewerStatus()) || m.isOutOfRange()) {
-                String rangeText = (m.getReferenceRangeMin() != null && m.getReferenceRangeMax() != null)
-                        ? String.format(" (Ref: %s - %s %s)", m.getReferenceRangeMin(), m.getReferenceRangeMax(), m.getUnit())
-                        : "";
-                rangeTransitions.add(String.format("%s transitioned from %s to %s%s", m.getTestName(), m.getOlderStatus(), m.getNewerStatus(), rangeText));
+            String rangeClause = "";
+            boolean hasMin = m.getReferenceRangeMin() != null;
+            boolean hasMax = m.getReferenceRangeMax() != null;
+            String refRangeText = (hasMin && hasMax) ? " (" + formatNum(m.getReferenceRangeMin()) + " - " + formatNum(m.getReferenceRangeMax()) + unitStr + ")" : "";
+
+            if ("LOW".equalsIgnoreCase(m.getNewerStatus())) {
+                rangeClause = "The latest result is still below the provided reference range" + refRangeText + ".";
+            } else if ("HIGH".equalsIgnoreCase(m.getNewerStatus())) {
+                rangeClause = "The latest result is above the provided reference range" + refRangeText + ".";
+            } else if ("NORMAL".equalsIgnoreCase(m.getNewerStatus())) {
+                if ("LOW".equalsIgnoreCase(m.getOlderStatus()) || "HIGH".equalsIgnoreCase(m.getOlderStatus())) {
+                    rangeClause = "The latest result has returned to the standard reference range" + refRangeText + ".";
+                } else {
+                    rangeClause = "The latest result is within the provided reference range" + refRangeText + ".";
+                }
+            } else {
+                rangeClause = "No reference range was specified for this parameter.";
             }
 
-            BigDecimal absDiff = m.getDifference().abs();
-            if (absDiff.compareTo(largestDelta) > 0) {
-                largestDelta = absDiff;
-                largestDeltaMetric = m;
-            }
+            String testNameLower = m.getTestName().toLowerCase();
+            String verb = (testNameLower.endsWith("s") || testNameLower.endsWith("cells")) ? "were" : "was";
+            String sentence = String.format("Your %s %s %s%s on %s. In your follow-up report on %s, it was %s%s. %s %s",
+                    m.getTestName(), verb, formatNum(m.getOlderValue()), unitStr, formattedOlderDate,
+                    formattedNewerDate, formatNum(m.getNewerValue()), unitStr, trendClause, rangeClause).trim();
+
+            plainSentences.add("• " + sentence);
         }
 
-        sb.append("• Parameter Trends: ");
-        sb.append(String.format("%d increased, %d decreased, and %d remained unchanged. ",
+        sb.append(String.join("\n\n", plainSentences));
+
+        sb.append("\n\n• Summary of Changes: ");
+        sb.append(String.format("%d increased, %d decreased, and %d remained unchanged.",
                 incNames.size(), decNames.size(), stableNames.size()));
-        if (!incNames.isEmpty()) {
-            sb.append("\n  - Increased: ").append(String.join("; ", incNames)).append(".");
-        }
-        if (!decNames.isEmpty()) {
-            sb.append("\n  - Decreased: ").append(String.join("; ", decNames)).append(".");
-        }
-        if (!stableNames.isEmpty()) {
-            sb.append("\n  - Unchanged: ").append(String.join("; ", stableNames)).append(".");
-        }
 
-        sb.append("\n\n• Reference Range Status: ");
-        if (!rangeTransitions.isEmpty()) {
-            sb.append(String.join("; ", rangeTransitions)).append(".");
-        } else {
-            sb.append("All compared parameters remained consistently within standard laboratory reference ranges.");
-        }
-
-        if (largestDeltaMetric != null) {
-            sb.append("\n\n• Notable Recorded Shift: The most significant numeric change was observed in ")
-                    .append(largestDeltaMetric.getTestName())
-                    .append(String.format(" with an absolute shift of %s %s (%s).",
-                            largestDeltaMetric.getDifference().abs(), largestDeltaMetric.getUnit(), largestDeltaMetric.getPercentageDifferenceString()));
-        }
-
-        sb.append("\n\nNote: Clinical reference ranges and calibration baselines may vary between laboratories and test methodologies. This longitudinal report provides structured comparative data and is not a clinical assessment or medical diagnosis.");
+        sb.append("\n\nNote: Clinical reference ranges and calibration baselines may vary between laboratories and test methodologies. This longitudinal comparison tracks recorded changes over time for patient awareness and does not predict future clinical trajectory, claim a result will become normal, or provide a medical diagnosis. Please consult a qualified physician for clinical evaluation.");
 
         return sb.toString();
     }
@@ -656,4 +695,78 @@ public class ReportService {
         dto.setInterpretation(rv.getInterpretation());
         return dto;
     }
+
+    public static List<ReportValueDto> extractValuesFromText(String content) {
+        List<ReportValueDto> list = new ArrayList<>();
+        if (content == null || content.trim().isEmpty()) return list;
+
+        String[] biomarkers = {
+            "Hemoglobin", "Hb", "Total Cholesterol", "Cholesterol", "HDL Cholesterol", "HDL",
+            "LDL Cholesterol", "LDL", "Triglycerides", "Fasting Blood Sugar", "Blood Sugar",
+            "Glucose", "HbA1c", "Platelets", "Platelet Count", "WBC", "White Blood Cells", "RBC",
+            "Red Blood Cells", "Creatinine", "Serum Creatinine", "Urea", "BUN", "Uric Acid",
+            "Bilirubin", "Total Bilirubin", "SGPT", "ALT", "SGOT", "AST", "ALP", "Calcium",
+            "Potassium", "Sodium", "TSH", "Hematocrit", "PCV"
+        };
+
+        Set<String> seen = new HashSet<>();
+
+        for (String bm : biomarkers) {
+            Pattern p = Pattern.compile("(?i)\\b" + Pattern.quote(bm) + "\\b[^0-9\\r\\n]{0,25}([0-9]+(?:\\.[0-9]+)?)\\s*([a-zA-Z\\/\\%\\^0-9]+)?(?:[^0-9\\r\\n]{0,25}([0-9]+(?:\\.[0-9]+)?)\\s*[-–to]\\s*([0-9]+(?:\\.[0-9]+)?))?");
+            Matcher m = p.matcher(content);
+            if (m.find()) {
+                String cKey = canonicalizeBiomarkerKey(null, bm);
+                if (!seen.contains(cKey)) {
+                    seen.add(cKey);
+                    ReportValueDto dto = new ReportValueDto();
+                    dto.setTestName(bm);
+                    dto.setNormalizedTestKey(cKey);
+                    try {
+                        dto.setNumericValue(new BigDecimal(m.group(1)));
+                    } catch (Exception e) {
+                        continue;
+                    }
+                    String unit = m.group(2) != null ? m.group(2).trim() : "";
+                    if ("mg".equalsIgnoreCase(unit) || "dl".equalsIgnoreCase(unit)) unit = "mg/dL";
+                    dto.setUnit(unit);
+                    if (m.group(3) != null && m.group(4) != null) {
+                        try {
+                            dto.setReferenceRangeMin(new BigDecimal(m.group(3)));
+                            dto.setReferenceRangeMax(new BigDecimal(m.group(4)));
+                        } catch (Exception ignored) {}
+                    }
+                    list.add(dto);
+                }
+            }
+        }
+        return list;
+    }
+
+    private List<ReportValue> tryExtractAndSaveValues(Report report, User uploader) {
+        List<ReportValue> saved = new ArrayList<>();
+        try {
+            Path filePath = this.storageDirectory.resolve(report.getStorageKey()).normalize();
+            if (Files.exists(filePath)) {
+                byte[] bytes = Files.readAllBytes(filePath);
+                String content = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
+                List<ReportValueDto> dtos = extractValuesFromText(content);
+                for (ReportValueDto dto : dtos) {
+                    ReportValue val = new ReportValue(
+                            report,
+                            dto.getTestName().trim(),
+                            dto.getNormalizedTestKey() != null ? dto.getNormalizedTestKey() : dto.getTestName().trim().toUpperCase().replace(" ", "_"),
+                            dto.getNumericValue(),
+                            dto.getUnit(),
+                            dto.getReferenceRangeMin(),
+                            dto.getReferenceRangeMax(),
+                            dto.getInterpretation(),
+                            uploader
+                    );
+                    saved.add(reportValueRepository.save(val));
+                }
+            }
+        } catch (Exception ignored) {}
+        return saved;
+    }
+
 }

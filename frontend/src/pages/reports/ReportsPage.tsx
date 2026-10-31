@@ -86,6 +86,7 @@ export const ReportsPage: React.FC = () => {
     Array<{ testName: string; numericValue: string; unit: string; min: string; max: string }>
   >([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [autoDetectedNotice, setAutoDetectedNotice] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
 
   // Query patient reports
@@ -207,6 +208,68 @@ export const ReportsPage: React.FC = () => {
       setIsCompareModalOpen(true);
     } catch (err: any) {
       setPageError(err.message || 'Failed to load comparison details.');
+    }
+  };
+
+
+  const parseLabValuesFromText = (text: string) => {
+    const biomarkers = [
+      { name: 'Hemoglobin', regex: /\b(Hemoglobin|Hb|Hgb)\b[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*([a-zA-Z/%^0-9]+)?(?:[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*[-–to]\s*(\d+(?:\.\d+)?))?/i, defaultUnit: 'g/dL', defaultMin: '12.0', defaultMax: '16.0' },
+      { name: 'Total Cholesterol', regex: /\b(Total Cholesterol|Cholesterol|Chol)\b[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*([a-zA-Z/%^0-9]+)?(?:[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*[-–to]\s*(\d+(?:\.\d+)?))?/i, defaultUnit: 'mg/dL', defaultMin: '125', defaultMax: '200' },
+      { name: 'HDL Cholesterol', regex: /\b(HDL|HDL Cholesterol)\b[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*([a-zA-Z/%^0-9]+)?(?:[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*[-–to]\s*(\d+(?:\.\d+)?))?/i, defaultUnit: 'mg/dL', defaultMin: '40', defaultMax: '60' },
+      { name: 'LDL Cholesterol', regex: /\b(LDL|LDL Cholesterol)\b[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*([a-zA-Z/%^0-9]+)?(?:[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*[-–to]\s*(\d+(?:\.\d+)?))?/i, defaultUnit: 'mg/dL', defaultMin: '50', defaultMax: '100' },
+      { name: 'Triglycerides', regex: /\b(Triglycerides|TG|Trig)\b[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*([a-zA-Z/%^0-9]+)?(?:[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*[-–to]\s*(\d+(?:\.\d+)?))?/i, defaultUnit: 'mg/dL', defaultMin: '50', defaultMax: '150' },
+      { name: 'Fasting Blood Sugar', regex: /\b(Fasting Blood Sugar|Blood Sugar|Glucose|FBS)\b[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*([a-zA-Z/%^0-9]+)?(?:[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*[-–to]\s*(\d+(?:\.\d+)?))?/i, defaultUnit: 'mg/dL', defaultMin: '70', defaultMax: '99' },
+      { name: 'Platelets', regex: /\b(Platelets|Platelet Count|PLT)\b[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*([a-zA-Z/%^0-9]+)?(?:[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*[-–to]\s*(\d+(?:\.\d+)?))?/i, defaultUnit: '10^3/uL', defaultMin: '150', defaultMax: '450' },
+      { name: 'WBC', regex: /\b(WBC|White Blood Cells|TLC)\b[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*([a-zA-Z/%^0-9]+)?(?:[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*[-–to]\s*(\d+(?:\.\d+)?))?/i, defaultUnit: '10^3/uL', defaultMin: '4.5', defaultMax: '11.0' },
+      { name: 'RBC', regex: /\b(RBC|Red Blood Cells)\b[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*([a-zA-Z/%^0-9]+)?(?:[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*[-–to]\s*(\d+(?:\.\d+)?))?/i, defaultUnit: '10^6/uL', defaultMin: '4.2', defaultMax: '5.8' },
+      { name: 'Serum Creatinine', regex: /\b(Serum Creatinine|Creatinine)\b[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*([a-zA-Z/%^0-9]+)?(?:[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*[-–to]\s*(\d+(?:\.\d+)?))?/i, defaultUnit: 'mg/dL', defaultMin: '0.7', defaultMax: '1.3' },
+      { name: 'Uric Acid', regex: /\b(Uric Acid)\b[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*([a-zA-Z/%^0-9]+)?(?:[^\d\r\n]{0,25}(\d+(?:\.\d+)?)\s*[-–to]\s*(\d+(?:\.\d+)?))?/i, defaultUnit: 'mg/dL', defaultMin: '3.5', defaultMax: '7.2' },
+    ];
+
+    const results: Array<{ testName: string; numericValue: string; unit: string; min: string; max: string }> = [];
+    const seen = new Set<string>();
+
+    for (const b of biomarkers) {
+      const match = text.match(b.regex);
+      if (match && match[2] && !seen.has(b.name)) {
+        seen.add(b.name);
+        let unit = match[3] ? match[3].trim() : b.defaultUnit;
+        if (unit.toLowerCase() === 'mg' || unit.toLowerCase() === 'dl') unit = 'mg/dL';
+        results.push({
+          testName: b.name,
+          numericValue: match[2],
+          unit: unit,
+          min: match[4] || b.defaultMin,
+          max: match[5] || b.defaultMax,
+        });
+      }
+    }
+    return results;
+  };
+
+  const handleFileChange = async (file: File | null) => {
+    setSelectedFile(file);
+    setAutoDetectedNotice(null);
+    if (!file) return;
+
+    if (!uploadTitle.trim()) {
+      const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ');
+      setUploadTitle(cleanName);
+    }
+
+    try {
+      const text = await file.text();
+      if (text && text.length > 0) {
+        const detected = parseLabValuesFromText(text);
+        if (detected.length > 0) {
+          setStructuredValues(detected);
+          setUploadType('LAB');
+          setAutoDetectedNotice(`✨ Auto-detected ${detected.length} test parameter(s) from "${file.name}". You can review or adjust them below.`);
+        }
+      }
+    } catch {
+      // Ignored for binary files
     }
   };
 
@@ -968,12 +1031,18 @@ export const ReportsPage: React.FC = () => {
               type="file"
               required
               accept=".pdf,.png,.jpg,.jpeg"
-              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
               className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-brand-panel file:text-brand-navy hover:file:bg-slate-200 cursor-pointer border border-brand-border rounded-xl p-2 bg-white"
             />
             <p className="text-[11px] text-brand-muted mt-1">
-              Supported formats: PDF, JPEG, PNG (Maximum size 15 MB)
+              Supported formats: PDF, JPEG, PNG, TXT (Maximum size 15 MB)
             </p>
+            {autoDetectedNotice && (
+              <div className="mt-2.5 p-2.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />
+                <span>{autoDetectedNotice}</span>
+              </div>
+            )}
           </div>
 
           <Input
@@ -1166,7 +1235,7 @@ export const ReportsPage: React.FC = () => {
                 isLoading={compareMutation.isPending}
                 icon={<TrendingUp className="w-4 h-4" />}
               >
-                Generate Longitudinal Analysis
+                Compare Reports
               </Button>
             </div>
           </div>
@@ -1286,7 +1355,7 @@ export const ReportsPage: React.FC = () => {
                       <div className="p-4 bg-teal-50/80 border border-teal-200 rounded-xl space-y-2">
                         <div className="text-xs font-bold text-teal-950 uppercase tracking-wide flex items-center gap-1.5">
                           <FileText className="w-4 h-4 text-teal-700" />
-                          <span>Written Longitudinal Comparison Description</span>
+                          <span>Patient Plain-Language Explanation</span>
                         </div>
                         <p className="text-xs text-teal-900 leading-relaxed whitespace-pre-line font-medium">
                           {comparisonResult.detailedDescription || comparisonResult.summary}
@@ -1342,16 +1411,15 @@ export const ReportsPage: React.FC = () => {
                             <tr>
                               <th className="py-3 px-3.5">Laboratory Parameter</th>
                               <th className="py-3 px-3.5">
-                                Baseline ({comparisonResult.olderReportDate})
+                                Older Value ({comparisonResult.olderReportDate})
                               </th>
                               <th className="py-3 px-3.5">
-                                Follow-up ({comparisonResult.newerReportDate})
+                                Newer Value ({comparisonResult.newerReportDate})
                               </th>
                               <th className="py-3 px-3.5">Difference</th>
                               <th className="py-3 px-3.5">% Change</th>
                               <th className="py-3 px-3.5">Trend</th>
-                              <th className="py-3 px-3.5">Ref Range</th>
-                              <th className="py-3 px-3.5">Status / Interpretation</th>
+                              <th className="py-3 px-3.5">Reference-Range Status</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-brand-border bg-white">
@@ -1437,21 +1505,21 @@ export const ReportsPage: React.FC = () => {
                                       {metric.trend}
                                     </Badge>
                                   </td>
-                                  <td className="py-3 px-3.5 text-brand-muted font-mono text-[11px]">
-                                    {metric.referenceRangeMin !== undefined && metric.referenceRangeMin !== null && metric.referenceRangeMax !== undefined && metric.referenceRangeMax !== null
-                                      ? `${metric.referenceRangeMin} - ${metric.referenceRangeMax} ${metric.unit || ''}`
-                                      : 'N/A'}
-                                  </td>
                                   <td className="py-3 px-3.5">
-                                    <span
-                                      className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${
-                                        isOor
-                                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                          : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                      }`}
-                                    >
-                                      {metric.statusTransition || `${metric.olderStatus} → ${metric.newerStatus}`}
-                                    </span>
+                                    <div className="font-semibold">
+                                      {metric.newerStatus === 'LOW' ? (
+                                        <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block text-[11px]">Below Reference Range</span>
+                                      ) : metric.newerStatus === 'HIGH' ? (
+                                        <span className="text-rose-800 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-block text-[11px]">Above Reference Range</span>
+                                      ) : (
+                                        <span className="text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block text-[11px]">Within Normal Limits</span>
+                                      )}
+                                    </div>
+                                    {metric.referenceRangeMin !== undefined && metric.referenceRangeMin !== null && metric.referenceRangeMax !== undefined && metric.referenceRangeMax !== null && (
+                                      <div className="text-[10.5px] text-brand-muted font-mono mt-1">
+                                        Ref: {metric.referenceRangeMin} - {metric.referenceRangeMax} {metric.unit || ''}
+                                      </div>
+                                    )}
                                   </td>
                                 </tr>
                               );

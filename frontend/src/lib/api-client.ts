@@ -2,7 +2,12 @@ import { ApiResponse } from '../types';
 
 function buildUrl(endpoint: string): string {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const rawApiUrl = ((import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '') as string).trim();
+  let rawApiUrl = ((import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '') as string).trim();
+  
+  if (!rawApiUrl && typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app')) {
+    // If deployed on Vercel and VITE_API_URL was not set in env vars, default to the live backend service
+    rawApiUrl = 'https://smart-patient-backend.onrender.com';
+  }
   
   if (rawApiUrl) {
     // Strip trailing slashes and any trailing /api to prevent duplication
@@ -85,6 +90,14 @@ export async function request<T>(endpoint: string, options: RequestInit = {}): P
     }
     const blob = await response.blob();
     return blob as unknown as T;
+  }
+
+  // Detect HTML response when JSON was expected (e.g. Vercel SPA rewrite fallback when backend is unreachable)
+  if (contentType && contentType.includes('text/html') && !endpoint.endsWith('.html')) {
+    throw new ApiError(
+      'The backend API is unreachable or returned HTML instead of JSON. In production on Vercel, please set VITE_API_URL in your Vercel Project Settings to point to your live backend server.',
+      502
+    );
   }
 
   let body: any;
