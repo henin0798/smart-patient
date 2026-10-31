@@ -414,6 +414,31 @@ public class ReportService {
         return comp;
     }
 
+    @Transactional(readOnly = true)
+    public ReportComparisonResultDto getComparisonResultById(Long comparisonId, Long userId) {
+        ReportComparison comp = getComparisonById(comparisonId, userId);
+        try {
+            ReportComparisonResultDto result = objectMapper.readValue(comp.getComparisonDataJson(), ReportComparisonResultDto.class);
+            result.setComparisonId(comp.getComparisonId());
+            if (result.getSummary() == null) {
+                result.setSummary(comp.getSummary());
+            }
+            return result;
+        } catch (Exception e) {
+            ReportComparisonResultDto fallback = new ReportComparisonResultDto();
+            fallback.setComparisonId(comp.getComparisonId());
+            fallback.setOlderReportId(comp.getOlderReport().getReportId());
+            fallback.setOlderReportTitle(comp.getOlderReport().getReportTitle());
+            fallback.setOlderReportDate(comp.getOlderReport().getReportDate().toString());
+            fallback.setNewerReportId(comp.getNewerReport().getReportId());
+            fallback.setNewerReportTitle(comp.getNewerReport().getReportTitle());
+            fallback.setNewerReportDate(comp.getNewerReport().getReportDate().toString());
+            fallback.setSummary(comp.getSummary());
+            fallback.setDisclaimer(comp.getDisclaimer());
+            return fallback;
+        }
+    }
+
     @Transactional
     public void deleteComparison(Long comparisonId, Long userId) {
         ReportComparison comp = getComparisonById(comparisonId, userId);

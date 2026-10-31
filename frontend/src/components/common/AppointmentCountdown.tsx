@@ -45,17 +45,20 @@ export const AppointmentCountdown: React.FC<AppointmentCountdownProps> = ({
     }
 
     const calculateTime = () => {
-      // Normalize date string
-      let targetTime: number;
-      if (rawTarget.includes('T')) {
-        targetTime = new Date(rawTarget).getTime();
-      } else if (rawTarget.includes(' ') && rawTarget.length > 10) {
-        // e.g. "2026-11-05 10:30:00"
-        targetTime = new Date(rawTarget.replace(' ', 'T')).getTime();
-      } else {
-        // Date only, e.g. "2026-11-05" -> treat as 09:00 AM on that day
-        targetTime = new Date(`${rawTarget}T09:00:00`).getTime();
+      // Normalize date string (handles "YYYY-MM-DD at HH:mm:ss", "YYYY-MM-DD HH:mm:ss", and ISO strings)
+      let normalized = rawTarget.trim();
+      if (normalized.includes(' at ')) {
+        normalized = normalized.replace(' at ', 'T');
+      } else if (normalized.includes(' ') && !normalized.includes('T')) {
+        normalized = normalized.replace(' ', 'T');
       }
+
+      if (!normalized.includes('T')) {
+        // Date only, e.g. "2026-11-05" -> treat as 09:00 AM on that day
+        normalized = `${normalized}T09:00:00`;
+      }
+
+      const targetTime = new Date(normalized).getTime();
 
       if (isNaN(targetTime)) {
         setTimeLeft((prev) => ({ ...prev, isValid: false }));

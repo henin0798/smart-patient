@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS reports (
     doctor_id BIGINT NULL,
     appointment_id BIGINT NULL,
     report_title VARCHAR(200) NOT NULL,
-    report_type ENUM('LAB', 'SCAN') NOT NULL,
+    report_type ENUM('LAB', 'SCAN', 'PRESCRIPTION', 'CERTIFICATE', 'OTHER') NOT NULL,
     report_date DATE NOT NULL,
     original_filename VARCHAR(255) NOT NULL,
     storage_key VARCHAR(255) NOT NULL,
@@ -277,4 +277,23 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_audit_timestamp (timestamp),
     INDEX idx_audit_action (action_type)
+) ENGINE=InnoDB;
+
+-- 17. Longitudinal Report Comparisons
+CREATE TABLE IF NOT EXISTS report_comparisons (
+    comparison_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    patient_id BIGINT NOT NULL,
+    older_report_id BIGINT NOT NULL,
+    newer_report_id BIGINT NOT NULL,
+    comparison_title VARCHAR(255) NOT NULL,
+    summary TEXT NULL,
+    comparison_data_json LONGTEXT NOT NULL,
+    disclaimer TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE,
+    FOREIGN KEY (older_report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
+    FOREIGN KEY (newer_report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
+    INDEX idx_comp_patient (patient_id),
+    INDEX idx_comp_older (older_report_id),
+    INDEX idx_comp_newer (newer_report_id)
 ) ENGINE=InnoDB;

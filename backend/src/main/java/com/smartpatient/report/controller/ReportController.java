@@ -132,11 +132,11 @@ public class ReportController {
     }
 
     @GetMapping("/comparisons/{comparisonId}")
-    public ResponseEntity<ApiResponse<ReportComparison>> getComparisonById(
+    public ResponseEntity<ApiResponse<ReportComparisonResultDto>> getComparisonById(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long comparisonId) {
-        ReportComparison comp = reportService.getComparisonById(comparisonId, principal.getUserId());
-        return ResponseEntity.ok(ApiResponse.success(comp));
+        ReportComparisonResultDto result = reportService.getComparisonResultById(comparisonId, principal.getUserId());
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 
     @DeleteMapping("/comparisons/{comparisonId}")
