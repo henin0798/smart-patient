@@ -8,18 +8,26 @@
     --color-navy-light: #173B63;
     --color-teal: #119E91;
     --color-teal-hover: #0C8178;
-    --color-bg: #F3F8FC;
-    --color-panel: #E7F2F7;
-    --color-border: #DCE6EE;
-    --color-text: #182A3D;
-    --color-muted: #68788B;
+    --color-bg: #F4F6F9;
+    --color-panel: #EAF0F6;
+    --color-border: #DDE5ED;
+    --color-text: #192738;
+    --color-muted: #64748B;
   }
 
   body {
     background-color: var(--color-bg);
     color: var(--color-text);
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", -system-ui, "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    letter-spacing: -0.011em;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.022em;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
@@ -29,7 +37,7 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #F3F8FC;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: #CBD5E1;
@@ -39,9 +47,113 @@
   background: #94A3B8;
 }
 
-/* Glassmorphism accents */
-.glass-panel {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid #DCE6EE;
+/* Apple Fluid Animations */
+@keyframes appleSpringIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes appleSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes appleFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes appleShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-apple-spring {
+  animation: appleSpringIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-apple-slide-up {
+  animation: appleSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-apple-fade {
+  animation: appleFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.apple-skeleton {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: appleShimmer 1.6s infinite ease-in-out;
+}
+
+/* Tactile Press Physics */
+.apple-press {
+  transition: transform 0.14s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.14s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.14s ease-out;
+}
+.apple-press:active {
+  transform: scale(0.97) !important;
+}
+
+/* Apple Liquid Glass Physical Optical Styling */
+.apple-liquid-glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.88) 0%, rgba(245, 248, 252, 0.72) 100%);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 2px 0 rgba(0, 0, 0, 0.03),
+    0 4px 16px -2px rgba(16, 43, 78, 0.06),
+    0 1px 3px 0 rgba(0, 0, 0, 0.03);
+}
+
+.apple-liquid-glass-teal {
+  background: linear-gradient(160deg, #14b8a6 0%, #0d9488 100%);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  box-shadow:
+    inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 3px 0 rgba(0, 0, 0, 0.18),
+    0 4px 14px -1px rgba(13, 148, 136, 0.38),
+    0 1px 3px 0 rgba(0, 0, 0, 0.08);
+}
+
+.apple-liquid-glass-navy {
+  background: linear-gradient(160deg, #1e4575 0%, #102b4e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -2px 3px 0 rgba(0, 0, 0, 0.25),
+    0 4px 14px -1px rgba(16, 43, 78, 0.32),
+    0 1px 3px 0 rgba(0, 0, 0, 0.08);
+}
+
+.apple-liquid-glass-card {
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 10px 25px -4px rgba(15, 23, 42, 0.04),
+    0 1px 3px 0 rgba(15, 23, 42, 0.02),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+}
+
+.apple-glass {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px) saturate(190%);
+  -webkit-backdrop-filter: blur(20px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
 }

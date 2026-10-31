@@ -14,23 +14,23 @@ export const Badge: React.FC<BadgeProps> = ({
   className = '',
 }) => {
   const sizeStyles = {
-    sm: 'px-2 py-0.5 text-xs',
-    md: 'px-2.5 py-1 text-xs font-medium',
+    sm: 'px-2.5 py-0.5 text-[11px] leading-tight',
+    md: 'px-3 py-1 text-xs font-semibold leading-tight',
   };
 
   const variantStyles = {
-    primary: 'bg-brand-navy/10 text-brand-navy border border-brand-navy/20',
-    teal: 'bg-brand-teal/10 text-brand-teal border border-brand-teal/20',
-    success: 'bg-emerald-50 text-brand-success border border-emerald-200',
-    warning: 'bg-amber-50 text-brand-warning border border-amber-200',
-    error: 'bg-rose-50 text-brand-error border border-rose-200',
-    info: 'bg-sky-50 text-brand-info border border-sky-200',
-    neutral: 'bg-slate-100 text-brand-muted border border-slate-200',
-    default: 'bg-slate-100 text-brand-muted border border-slate-200',
+    primary: 'bg-brand-navy/10 text-brand-navy border border-brand-navy/15',
+    teal: 'bg-teal-50 text-teal-800 border border-teal-200/80',
+    success: 'bg-emerald-50 text-emerald-800 border border-emerald-200/80',
+    warning: 'bg-amber-50 text-amber-800 border border-amber-200/80',
+    error: 'bg-rose-50 text-rose-800 border border-rose-200/80',
+    info: 'bg-sky-50 text-sky-800 border border-sky-200/80',
+    neutral: 'bg-slate-100/80 text-slate-700 border border-slate-200/80',
+    default: 'bg-slate-100/80 text-slate-700 border border-slate-200/80',
   };
 
   return (
-    <span className={`inline-flex items-center rounded-full ${sizeStyles[size]} ${variantStyles[variant]} ${className}`}>
+    <span className={`inline-flex items-center font-semibold rounded-full transition-colors ${sizeStyles[size]} ${variantStyles[variant]} ${className}`}>
       {children}
     </span>
   );

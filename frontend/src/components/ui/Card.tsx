@@ -5,15 +5,28 @@ interface CardProps {
   className?: string;
   onClick?: () => void;
   hoverEffect?: boolean;
+  glass?: boolean;
 }
 
-export const Card: React.FC<CardProps> = ({ children, className = '', onClick, hoverEffect = false }) => {
+export const Card: React.FC<CardProps> = ({
+  children,
+  className = '',
+  onClick,
+  hoverEffect = false,
+  glass = false,
+}) => {
+  const baseCard = glass
+    ? 'apple-liquid-glass-card'
+    : 'bg-white/95 backdrop-blur-sm border border-slate-200/70 shadow-[0_2px_12px_rgba(0,0,0,0.03)]';
+
+  const interactive = hoverEffect
+    ? 'apple-press hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:border-slate-300 transition-all duration-200 cursor-pointer'
+    : '';
+
   return (
     <div
       onClick={onClick}
-      className={`bg-white rounded-2xl border border-brand-border shadow-sm p-6 ${
-        hoverEffect ? 'hover:shadow-md hover:border-brand-teal/40 transition-all duration-200 cursor-pointer' : ''
-      } ${className}`}
+      className={`${baseCard} rounded-[20px] p-6 ${interactive} ${className}`}
     >
       {children}
     </div>
@@ -34,10 +47,10 @@ export const CardHeader: React.FC<{
   return (
     <div className={`flex items-start justify-between mb-4 ${className}`}>
       <div>
-        {title && <h3 className="text-lg font-semibold text-brand-navy leading-tight">{title}</h3>}
-        {subtitle && <p className="text-sm text-brand-muted mt-0.5">{subtitle}</p>}
+        {title && <h3 className="text-lg font-bold tracking-tight text-brand-navy leading-snug">{title}</h3>}
+        {subtitle && <p className="text-xs text-brand-muted mt-1 leading-relaxed">{subtitle}</p>}
       </div>
-      {action && <div>{action}</div>}
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 };
@@ -45,7 +58,7 @@ export const CardHeader: React.FC<{
 export const CardTitle: React.FC<{ children: React.ReactNode; className?: string }> = ({
   children,
   className = '',
-}) => <h3 className={`text-lg font-semibold text-brand-navy leading-tight ${className}`}>{children}</h3>;
+}) => <h3 className={`text-lg font-bold tracking-tight text-brand-navy leading-snug ${className}`}>{children}</h3>;
 
 export const CardContent: React.FC<{ children: React.ReactNode; className?: string }> = ({
   children,
@@ -55,4 +68,4 @@ export const CardContent: React.FC<{ children: React.ReactNode; className?: stri
 export const CardFooter: React.FC<{ children: React.ReactNode; className?: string }> = ({
   children,
   className = '',
-}) => <div className={`mt-6 pt-4 border-t border-brand-border flex items-center justify-end gap-3 ${className}`}>{children}</div>;
+}) => <div className={`mt-6 pt-4 border-t border-slate-100 flex items-center justify-end gap-3 ${className}`}>{children}</div>;

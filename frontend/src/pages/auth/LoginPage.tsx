@@ -2,10 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api-client';
-import { Activity, Eye, EyeOff, Lock, User, AlertCircle, ArrowRight, Stethoscope, ShieldCheck } from 'lucide-react';
+import { Activity, Eye, EyeOff, User, AlertCircle, Stethoscope, ShieldCheck } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { Badge } from '../../components/ui/Badge';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -70,39 +69,39 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-brand-bg flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#F4F6F9] flex flex-col justify-center py-12 sm:px-6 lg:px-8 selection:bg-teal-500/20">
       {/* Brand Header */}
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <Link to="/" className="inline-flex items-center space-x-2.5">
-          <div className="w-12 h-12 rounded-2xl bg-brand-navy flex items-center justify-center text-brand-teal shadow-lg shadow-brand-navy/10">
-            <Activity className="w-7 h-7 text-brand-teal" />
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center animate-apple-fade">
+        <Link to="/" className="apple-press inline-flex items-center space-x-2.5">
+          <div className="w-12 h-12 rounded-[16px] apple-liquid-glass-teal flex items-center justify-center text-white shadow-md">
+            <Activity className="w-6 h-6" />
           </div>
-          <div className="text-left">
-            <span className="text-2xl font-bold tracking-tight text-brand-navy">SMART</span>
-            <span className="text-2xl font-bold tracking-tight text-brand-teal ml-1">PATIENT</span>
+          <div className="text-left leading-none">
+            <span className="text-2xl font-black tracking-tight text-[#102B4E]">SMART</span>
+            <span className="text-2xl font-black tracking-tight text-teal-600 ml-1">PATIENT</span>
           </div>
         </Link>
-        <h2 className="mt-6 text-2xl font-extrabold text-brand-navy tracking-tight">
+        <h2 className="mt-6 text-2xl font-black text-slate-900 tracking-tight">
           Sign In to Your Health Portal
         </h2>
-        <p className="mt-1 text-sm text-brand-muted">
-          Access your digital health record, doctor encounters, or hospital administration
+        <p className="mt-1 text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
+          Access your digital health record, doctor encounters, or clinical administration
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
-        <div className="bg-white py-8 px-6 shadow-xl rounded-2xl border border-brand-border sm:px-10">
-          {/* Role selector tabs */}
-          <div className="mb-6 grid grid-cols-3 gap-1 bg-brand-panel p-1 rounded-xl border border-brand-border">
+        <div className="apple-liquid-glass-card py-8 px-6 sm:px-9 rounded-[28px] shadow-[0_20px_50px_rgba(15,23,42,0.06)] animate-apple-spring border border-white/80">
+          {/* Apple Segmented Role Selector */}
+          <div className="mb-6 grid grid-cols-3 gap-1 apple-liquid-glass p-1 rounded-2xl border border-slate-200/60 shadow-inner">
             {(['PATIENT', 'DOCTOR', 'ADMIN'] as const).map((r) => (
               <button
                 key={r}
                 type="button"
                 onClick={() => setRole(r)}
-                className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                className={`apple-press py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                   role === r
-                    ? 'bg-white text-brand-navy shadow-sm'
-                    : 'text-brand-muted hover:text-brand-navy'
+                    ? 'apple-liquid-glass-navy text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
                 {r === 'PATIENT' ? (
@@ -118,9 +117,9 @@ export const LoginPage: React.FC = () => {
           </div>
 
           {errorMessage && (
-            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-brand-error text-xs flex items-start space-x-2.5">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
+            <div className="mb-5 p-3.5 rounded-2xl bg-rose-50/90 border border-rose-200/80 text-rose-700 text-xs font-medium flex items-start space-x-2.5 animate-apple-fade">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+              <span className="leading-relaxed">{errorMessage}</span>
             </div>
           )}
 
@@ -133,7 +132,7 @@ export const LoginPage: React.FC = () => {
                 role === 'PATIENT'
                   ? 'e.g. patient1 or deepak@student.edu'
                   : role === 'DOCTOR'
-                  ? 'e.g. dr.sharma or dr.rajesh'
+                  ? 'e.g. dr.sharma'
                   : 'e.g. admin'
               }
               value={usernameOrEmail}
@@ -152,7 +151,8 @@ export const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-9 text-slate-400 hover:text-brand-navy"
+                className="apple-press absolute right-3.5 top-8 text-slate-400 hover:text-slate-700 p-1"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -160,60 +160,60 @@ export const LoginPage: React.FC = () => {
 
             <Button
               type="submit"
-              variant="navy"
+              variant="primary"
               size="lg"
-              className="w-full mt-2"
+              className="w-full mt-3 font-bold"
               isLoading={isLoading}
             >
               Sign In as {role.charAt(0) + role.slice(1).toLowerCase()}
             </Button>
 
             {loadingNotice && (
-              <p className="mt-2 text-center text-xs text-brand-teal font-medium animate-pulse">
+              <p className="mt-2 text-center text-xs text-teal-700 font-semibold animate-pulse">
                 {loadingNotice}
               </p>
             )}
           </form>
 
           {/* Demonstration Quick Fill Box */}
-          <div className="mt-6 pt-5 border-t border-brand-border">
-            <div className="text-xs font-semibold text-brand-muted uppercase tracking-wider mb-2.5 text-center">
+          <div className="mt-7 pt-5 border-t border-slate-100">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5 text-center">
               Demonstration Test Accounts
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs">
               <button
                 type="button"
                 onClick={() => handleQuickFill('patient1', 'Patient@123', 'PATIENT')}
-                className="p-2 text-left rounded-lg border border-brand-border hover:bg-brand-bg transition"
+                className="apple-press p-2.5 text-left rounded-xl apple-liquid-glass hover:border-teal-400/60 transition-all"
               >
-                <div className="font-bold text-brand-navy">Patient</div>
-                <div className="text-[10px] text-brand-muted truncate">patient1</div>
+                <div className="font-bold text-slate-900">Patient</div>
+                <div className="text-[10px] text-slate-500 truncate font-mono">patient1</div>
               </button>
               <button
                 type="button"
                 onClick={() => handleQuickFill('dr.sharma', 'Doctor@123', 'DOCTOR')}
-                className="p-2 text-left rounded-lg border border-brand-border hover:bg-brand-bg transition"
+                className="apple-press p-2.5 text-left rounded-xl apple-liquid-glass hover:border-teal-400/60 transition-all"
               >
-                <div className="font-bold text-brand-teal">Doctor</div>
-                <div className="text-[10px] text-brand-muted truncate">dr.sharma</div>
+                <div className="font-bold text-teal-700">Doctor</div>
+                <div className="text-[10px] text-slate-500 truncate font-mono">dr.sharma</div>
               </button>
               <button
                 type="button"
                 onClick={() => handleQuickFill('admin', 'Admin@123', 'ADMIN')}
-                className="p-2 text-left rounded-lg border border-brand-border hover:bg-brand-bg transition"
+                className="apple-press p-2.5 text-left rounded-xl apple-liquid-glass hover:border-teal-400/60 transition-all"
               >
-                <div className="font-bold text-brand-error">Admin</div>
-                <div className="text-[10px] text-brand-muted truncate">admin</div>
+                <div className="font-bold text-rose-700">Admin</div>
+                <div className="text-[10px] text-slate-500 truncate font-mono">admin</div>
               </button>
             </div>
           </div>
 
           {/* Contextual Registration Link */}
-          <div className="mt-6 text-center text-xs text-brand-muted">
+          <div className="mt-6 text-center text-xs text-slate-500">
             {role === 'DOCTOR' ? (
               <>
                 Medical practitioner looking to join the network?{' '}
-                <Link to="/register?role=DOCTOR" className="font-semibold text-brand-teal hover:underline block sm:inline mt-1 sm:mt-0">
+                <Link to="/register?role=DOCTOR" className="font-bold text-teal-600 hover:text-teal-700 hover:underline block sm:inline mt-1 sm:mt-0">
                   Register Doctor Account
                 </Link>
               </>
@@ -224,7 +224,7 @@ export const LoginPage: React.FC = () => {
             ) : (
               <>
                 Don't have a personal health record?{' '}
-                <Link to="/register?role=PATIENT" className="font-semibold text-brand-teal hover:underline block sm:inline mt-1 sm:mt-0">
+                <Link to="/register?role=PATIENT" className="font-bold text-teal-600 hover:text-teal-700 hover:underline block sm:inline mt-1 sm:mt-0">
                   Create a Patient ID
                 </Link>
               </>

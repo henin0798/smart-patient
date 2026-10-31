@@ -20,6 +20,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import {
+  Loader2,
   FileText,
   Upload,
   Download,
@@ -445,14 +446,14 @@ export const ReportsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-brand-border pb-2">
+      {/* Navigation Tabs - Apple Segmented Control */}
+      <div className="inline-flex flex-wrap items-center gap-1.5 p-1.5 apple-liquid-glass rounded-2xl border border-slate-200/80 shadow-sm max-w-full overflow-x-auto">
         <button
           onClick={() => setActiveTab('ALL')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+          className={`apple-press px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
             activeTab === 'ALL'
-              ? 'bg-brand-navy text-white shadow-sm'
-              : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
+              ? 'apple-liquid-glass-navy text-white shadow-sm'
+              : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
@@ -462,8 +463,8 @@ export const ReportsPage: React.FC = () => {
           onClick={() => setActiveTab('LAB')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
             activeTab === 'LAB'
-              ? 'bg-brand-navy text-white shadow-sm'
-              : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
+              ? 'apple-liquid-glass-navy text-white shadow-sm'
+              : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
           }`}
         >
           <FileText className="w-3.5 h-3.5" />
@@ -473,8 +474,8 @@ export const ReportsPage: React.FC = () => {
           onClick={() => setActiveTab('SCAN')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
             activeTab === 'SCAN'
-              ? 'bg-brand-navy text-white shadow-sm'
-              : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
+              ? 'apple-liquid-glass-navy text-white shadow-sm'
+              : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
           }`}
         >
           <Activity className="w-3.5 h-3.5" />
@@ -484,8 +485,8 @@ export const ReportsPage: React.FC = () => {
           onClick={() => setActiveTab('PRESCRIPTION')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
             activeTab === 'PRESCRIPTION'
-              ? 'bg-brand-navy text-white shadow-sm'
-              : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
+              ? 'apple-liquid-glass-navy text-white shadow-sm'
+              : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
           }`}
         >
           <FileCheck className="w-3.5 h-3.5" />
@@ -495,8 +496,8 @@ export const ReportsPage: React.FC = () => {
           onClick={() => setActiveTab('CERTIFICATE')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
             activeTab === 'CERTIFICATE'
-              ? 'bg-brand-navy text-white shadow-sm'
-              : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
+              ? 'apple-liquid-glass-navy text-white shadow-sm'
+              : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
           }`}
         >
           <FileText className="w-3.5 h-3.5" />
@@ -506,18 +507,18 @@ export const ReportsPage: React.FC = () => {
           onClick={() => setActiveTab('OTHER')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
             activeTab === 'OTHER'
-              ? 'bg-brand-navy text-white shadow-sm'
-              : 'text-brand-muted hover:bg-slate-200 hover:text-brand-navy'
+              ? 'apple-liquid-glass-navy text-white shadow-sm'
+              : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
           }`}
         >
           <span>Other</span>
         </button>
         <button
           onClick={() => setActiveTab('COMPARISONS')}
-          className={`ml-auto px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+          className={`apple-press ml-auto px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
             activeTab === 'COMPARISONS'
-              ? 'bg-brand-teal text-white shadow-sm'
-              : 'text-brand-teal border border-brand-teal/40 hover:bg-brand-teal/10'
+              ? 'apple-liquid-glass-teal text-white shadow-sm'
+              : 'text-teal-700 bg-teal-50/70 border border-teal-200/80 hover:bg-teal-100/70'
           }`}
         >
           <History className="w-3.5 h-3.5" />
@@ -548,7 +549,20 @@ export const ReportsPage: React.FC = () => {
           </div>
 
           {isLoadingComparisons ? (
-            <div className="py-12 text-center text-sm text-brand-muted">Loading saved comparisons...</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-apple-fade">
+              {[1, 2].map((i) => (
+                <div key={i} className="apple-liquid-glass-card rounded-[22px] p-5 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl apple-skeleton shrink-0" />
+                    <div className="space-y-1.5 flex-1">
+                      <div className="h-4 w-3/4 apple-skeleton rounded-md" />
+                      <div className="h-3 w-1/3 apple-skeleton rounded-md" />
+                    </div>
+                  </div>
+                  <div className="h-12 apple-skeleton rounded-xl" />
+                </div>
+              ))}
+            </div>
           ) : savedComparisons.length === 0 ? (
             <Card className="py-12 text-center">
               <History className="w-12 h-12 text-slate-300 mx-auto mb-3" />
@@ -661,7 +675,7 @@ export const ReportsPage: React.FC = () => {
         /* Documents Grid & Search/Filter Bar */
         <div className="space-y-4">
           {/* Search, Filter & Sort Bar */}
-          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-brand-panel/40 p-3 rounded-2xl border border-brand-border/70">
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between apple-liquid-glass p-3 rounded-[20px] border border-white/80 shadow-sm">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-brand-muted absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -700,7 +714,20 @@ export const ReportsPage: React.FC = () => {
 
           {/* Document Cards Grid */}
           {isLoadingReports ? (
-            <div className="py-12 text-center text-sm text-brand-muted">Loading medical documents...</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-apple-fade">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="apple-liquid-glass-card rounded-[22px] p-5 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl apple-skeleton shrink-0" />
+                    <div className="space-y-1.5 flex-1">
+                      <div className="h-4 w-3/4 apple-skeleton rounded-md" />
+                      <div className="h-3 w-1/2 apple-skeleton rounded-md" />
+                    </div>
+                  </div>
+                  <div className="h-10 apple-skeleton rounded-xl mt-3" />
+                </div>
+              ))}
+            </div>
           ) : filteredReports.length === 0 ? (
             <Card className="py-12 text-center">
               <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
@@ -919,7 +946,7 @@ export const ReportsPage: React.FC = () => {
                   <Activity className="w-4 h-4 text-brand-teal" />
                   <span>Structured Lab Parameters ({previewReport.reportValues.length})</span>
                 </h4>
-                <div className="overflow-x-auto rounded-xl border border-brand-border">
+                <div className="overflow-x-auto rounded-[22px] border border-slate-200/80 apple-liquid-glass-card shadow-sm">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-brand-navy text-white text-[11px] uppercase">
                       <tr>
@@ -1193,7 +1220,7 @@ export const ReportsPage: React.FC = () => {
       >
         <div className="space-y-6">
           {/* Report Selection Dropdowns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-brand-panel/60 rounded-xl border border-brand-border/80">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 apple-liquid-glass rounded-[22px] border border-white/80 shadow-sm">
             <Select
               label="Baseline Report (Older Date)"
               value={olderReportId || ''}
@@ -1240,11 +1267,29 @@ export const ReportsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Comparison Results Area */}
+          {/* Comparison In-Progress Loading State */}
+          {compareMutation.isPending && (
+            <div className="p-6 rounded-[22px] apple-liquid-glass space-y-4 animate-apple-fade border border-teal-200/60 shadow-sm">
+              <div className="flex items-center gap-3">
+                <Loader2 className="w-5 h-5 text-teal-600 animate-spin" />
+                <div>
+                  <div className="text-sm font-bold text-slate-900 tracking-tight">Comparing Medical Reports...</div>
+                  <div className="text-xs text-slate-500 mt-0.5">Matching biomarkers and computing longitudinal differentials between reports.</div>
+                </div>
+              </div>
+              <div className="space-y-2.5 pt-2">
+                <div className="h-3.5 apple-skeleton rounded-lg w-full" />
+                <div className="h-3.5 apple-skeleton rounded-lg w-5/6" />
+                <div className="h-3.5 apple-skeleton rounded-lg w-3/5" />
+              </div>
+            </div>
+          )}
+
+          {/* Comparison Results Area with Apple Slide-Up Transition */}
           {comparisonResult && (
-            <div className="space-y-5">
+            <div className="space-y-6 animate-apple-slide-up">
               {/* Actions Header Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-4 apple-liquid-glass rounded-[20px] border border-white/90 shadow-sm">
                 <div>
                   <h3 className="text-sm font-bold text-brand-navy">
                     Comparative Study: {comparisonResult.olderReportTitle} vs {comparisonResult.newerReportTitle}
@@ -1352,7 +1397,7 @@ export const ReportsPage: React.FC = () => {
 
                     {/* Written Comparison Description */}
                     {(comparisonResult.detailedDescription || comparisonResult.summary) && (
-                      <div className="p-4 bg-teal-50/80 border border-teal-200 rounded-xl space-y-2">
+                      <div className="p-5 bg-gradient-to-br from-teal-50/90 via-white/80 to-slate-50/90 border border-teal-200/80 rounded-[22px] shadow-sm space-y-2.5">
                         <div className="text-xs font-bold text-teal-950 uppercase tracking-wide flex items-center gap-1.5">
                           <FileText className="w-4 h-4 text-teal-700" />
                           <span>Patient Plain-Language Explanation</span>
@@ -1405,9 +1450,9 @@ export const ReportsPage: React.FC = () => {
 
                     {/* Matched Metrics 8-Column Detailed Table (Only when data exists) */}
                     {hasData && (
-                      <div className="overflow-x-auto rounded-xl border border-brand-border">
+                      <div className="overflow-x-auto rounded-[22px] border border-slate-200/80 apple-liquid-glass-card shadow-sm">
                         <table className="w-full text-left text-xs">
-                          <thead className="bg-brand-navy text-white text-[11px] uppercase tracking-wider">
+                          <thead className="apple-liquid-glass-navy text-white text-[10.5px] uppercase tracking-wider font-bold">
                             <tr>
                               <th className="py-3 px-3.5">Laboratory Parameter</th>
                               <th className="py-3 px-3.5">
